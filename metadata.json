@@ -1,0 +1,6 @@
+{
+  "name": "NetForge",
+  "description": "A gamified, community-driven network configuration training platform where users learn, create, and compete in command-line syntax and fill-in-the-blank networking challenges.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
