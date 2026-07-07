@@ -28,6 +28,106 @@ interface ArenaProps {
   hasNextProblem?: boolean;
 }
 
+// Global Cisco/CLI abbreviation mapping helper
+const expandWord = (word: string): string => {
+  const w = word.toLowerCase().trim();
+  if (w === "en") return "enable";
+  if (w === "conf" || w === "config" || w === "con") return "configure";
+  if (w === "t" || w === "term") return "terminal";
+  if (w === "int" || w === "inter" || w === "inte") return "interface";
+  if (w === "add" || w === "addr") return "address";
+  if (w === "shut") return "shutdown";
+  if (w === "sw" || w === "switch") return "switchport";
+  if (w === "mod") return "mode";
+  if (w === "tr" || w === "tru") return "trunk";
+  if (w === "na" || w === "nat") return "native";
+  if (w === "vl" || w === "vla") return "vlan";
+  if (w === "sh") return "show";
+  if (w === "ro") return "route";
+  if (w === "osp") return "ospf";
+  
+  // Interface shortcuts
+  // e.g. gi0/0, gig0/0, g0/0, fa0/1, fast0/1, lo0, eth0
+  const interfaceMatch = w.match(/^([a-z]+)(\d+[\/\d\.]*)$/);
+  if (interfaceMatch) {
+    const [matchedFull, name, port] = interfaceMatch;
+    if ("gigabitethernet".startsWith(name)) {
+      return "gigabitethernet" + port;
+    }
+    if ("fastethernet".startsWith(name)) {
+      return "fastethernet" + port;
+    }
+    if ("ethernet".startsWith(name)) {
+      return "ethernet" + port;
+    }
+    if ("loopback".startsWith(name)) {
+      return "loopback" + port;
+    }
+  }
+
+  return w;
+};
+
+// Check if a typed word matches the expected word, considering abbreviations
+const isWordMatch = (actualWord: string, expectedWord: string): boolean => {
+  const act = actualWord.toLowerCase();
+  const exp = expectedWord.toLowerCase();
+  if (act === exp) return true;
+
+  // Check known expanded mappings
+  const expandedAct = expandWord(act);
+  const expandedExp = expandWord(exp);
+  if (expandedAct === expandedExp) return true;
+
+  // General prefix match (must be at least 1 char)
+  if (act.length >= 1 && exp.startsWith(act)) {
+    return true;
+  }
+
+  // Handle interfaces with numbers like "g0/0" matching "gigabitethernet0/0"
+  const actIntf = act.match(/^([a-z]+)(\d+[\/\d\.]*)$/);
+  const expIntf = exp.match(/^([a-z]+)(\d+[\/\d\.]*)$/);
+  if (actIntf && expIntf) {
+    const [actFull, actPrefix, actPort] = actIntf;
+    const [expFull, expPrefix, expPort] = expIntf;
+    if (actPort === expPort) {
+      if (expPrefix.startsWith(actPrefix) || expandWord(actPrefix).startsWith(expPrefix)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+};
+
+// Main function to check if the full typed line matches the expected configuration line
+const checkCommandMatch = (actualInput: string, expectedInput: string): boolean => {
+  const actualClean = actualInput.trim().toLowerCase().replace(/\s+/g, " ");
+  const expectedClean = expectedInput.trim().toLowerCase().replace(/\s+/g, " ");
+
+  if (actualClean === expectedClean) return true;
+
+  const actualWords = actualClean.split(" ");
+  const expectedWords = expectedClean.split(" ");
+
+  // If number of words is different, check if the joined fully expanded commands match
+  const actualExpanded = actualWords.map(expandWord).join(" ");
+  const expectedExpanded = expectedWords.map(expandWord).join(" ");
+  if (actualExpanded === expectedExpanded) return true;
+
+  if (actualWords.length !== expectedWords.length) {
+    return false;
+  }
+
+  for (let i = 0; i < actualWords.length; i++) {
+    if (!isWordMatch(actualWords[i], expectedWords[i])) {
+      return false;
+    }
+  }
+
+  return true;
+};
+
 export const Arena: React.FC<ArenaProps> = ({ problem, onQuit, onSolve, onNextProblem, hasNextProblem }) => {
   // Mobile UI toggle state ("topology" | "terminal")
   const [activeMobileTab, setActiveMobileTab] = useState<"topology" | "terminal">("topology");
@@ -63,6 +163,21 @@ export const Arena: React.FC<ArenaProps> = ({ problem, onQuit, onSolve, onNextPr
   // Active router highlight state in SVG Topology
   const [selectedNode, setSelectedNode] = useState<string>("RouterA");
 
+  // Dynamically resolve topology
+  const currentTopology = problem.topology || 
+    (problem.topic === "VLANs & Trunking" ? "Access-Core Spine" :
+     problem.topic === "Device Security" ? "Ring Topology" :
+     "Standard Hub");
+
+  const handleSelectNode = (nodeName: string) => {
+    playSound("click");
+    setSelectedNode(nodeName);
+    setTerminalHistory((prev) => [
+      ...prev,
+      { text: `>>> CONSOLE SESSION RE-ROUTED TO DEVICE: ${nodeName} <<<`, type: "system" }
+    ]);
+  };
+
   // Quit Confirmation Modal
   const [showQuitModal, setShowQuitModal] = useState<boolean>(false);
 
@@ -81,9 +196,24 @@ export const Arena: React.FC<ArenaProps> = ({ problem, onQuit, onSolve, onNextPr
     setIsCompleted(false);
     setDidTimeOut(false);
     setShowSolution(false);
+
+    // Resolve initial node
+    const activeTopology = problem.topology || 
+      (problem.topic === "VLANs & Trunking" ? "Access-Core Spine" :
+       problem.topic === "Device Security" ? "Ring Topology" :
+       "Standard Hub");
+    if (activeTopology === "Access-Core Spine") {
+      setSelectedNode("Spine1");
+    } else if (activeTopology === "Ring Topology") {
+      setSelectedNode("RouterA");
+    } else {
+      setSelectedNode("RouterA");
+    }
+
     setTerminalHistory([
       { text: `NETFORGE COMMAND SYNTAX AGENT CONSOLE // PROB ID: ${problem.id}`, type: "system" },
       { text: `BOOT SEQUENCE COMPILING INTEL: ${problem.instructions}`, type: "system" },
+      { text: `TOPOLOGY TEMPLATE DETECTED: ${activeTopology.toUpperCase()}`, type: "system" },
       { text: `------------------------------------------------------`, type: "system" },
     ]);
   }, [problem.id]);
@@ -124,20 +254,8 @@ export const Arena: React.FC<ArenaProps> = ({ problem, onQuit, onSolve, onNextPr
     e.preventDefault();
     if (!problem.steps || isCompleted) return;
 
-    const trimmedInput = cliInput.trim().toLowerCase();
     const currentStep = problem.steps[currentStepIndex];
-    
-    // Normalize both inputs for solid low-friction matching (shorthand support)
-    const normalizedExpected = currentStep.expectedInput.toLowerCase().replace(/\s+/g, " ");
-    const normalizedActual = trimmedInput.replace(/\s+/g, " ");
-
-    const isMatch = normalizedActual === normalizedExpected || 
-                    // Let's add standard shorhands matching (e.g. "int gi0/0" -> "interface gigabitethernet0/0")
-                    (normalizedExpected.includes("interface gigabitethernet") && 
-                     normalizedActual.replace("int g", "interface gigabitethernet").replace("int gi", "interface gigabitethernet") === normalizedExpected) ||
-                    (normalizedExpected === "configure terminal" && (normalizedActual === "conf t" || normalizedActual === "config t")) ||
-                    (normalizedExpected === "no shutdown" && normalizedActual === "no shut") ||
-                    (normalizedExpected === "enable" && normalizedActual === "en");
+    const isMatch = checkCommandMatch(cliInput, currentStep.expectedInput);
 
     if (isMatch) {
       playSound("success");
@@ -354,89 +472,246 @@ export const Arena: React.FC<ArenaProps> = ({ problem, onQuit, onSolve, onNextPr
             <div className="bg-[#050508] border border-slate-850 rounded-xl p-4 flex-1 flex items-center justify-center relative overflow-hidden min-h-[220px]">
               
               <svg viewBox="0 0 400 240" className="w-full max-w-sm h-full">
-                
-                {/* Connection Links (Lines) */}
-                {/* Link: Router A to Switch A */}
-                <line
-                  x1="100" y1="80" x2="200" y2="150"
-                  stroke={isCompleted ? "#00E5FF" : "#1A237E"}
-                  strokeWidth="3.5"
-                  strokeDasharray={isCompleted ? "0" : "5,5"}
-                  className="transition-all duration-500"
-                />
-                {/* Link: Switch A to Router B */}
-                <line
-                  x1="200" y1="150" x2="300" y2="80"
-                  stroke={isCompleted ? "#00E5FF" : "#1A237E"}
-                  strokeWidth="3.5"
-                  strokeDasharray={isCompleted ? "0" : "5,5"}
-                  className="transition-all duration-500"
-                />
+                {currentTopology === "Ring Topology" ? (
+                  <>
+                    {/* Ring Topology Connection Links */}
+                    <line
+                      x1="120" y1="70" x2="280" y2="70"
+                      stroke={isCompleted ? "#00E5FF" : (selectedNode === "RouterA" || selectedNode === "RouterB" ? "#00E5FF" : "#1A237E")}
+                      strokeWidth="3.5"
+                      strokeDasharray={isCompleted ? "0" : "5,5"}
+                      className="transition-all duration-500"
+                    />
+                    <line
+                      x1="280" y1="70" x2="200" y2="170"
+                      stroke={isCompleted ? "#00E5FF" : (selectedNode === "RouterB" || selectedNode === "RouterC" ? "#00E5FF" : "#1A237E")}
+                      strokeWidth="3.5"
+                      strokeDasharray={isCompleted ? "0" : "5,5"}
+                      className="transition-all duration-500"
+                    />
+                    <line
+                      x1="200" y1="170" x2="120" y2="70"
+                      stroke={isCompleted ? "#00E5FF" : (selectedNode === "RouterC" || selectedNode === "RouterA" ? "#00E5FF" : "#1A237E")}
+                      strokeWidth="3.5"
+                      strokeDasharray={isCompleted ? "0" : "5,5"}
+                      className="transition-all duration-500"
+                    />
 
-                {/* Switch A Node (Center) */}
-                <g
-                  onClick={() => { playSound("click"); setSelectedNode("SwitchA"); }}
-                  className="cursor-pointer group"
-                >
-                  <rect
-                    x="175" y="130" width="50" height="30" rx="4"
-                    fill={selectedNode === "SwitchA" ? "#1A237E" : "#0D111A"}
-                    stroke={selectedNode === "SwitchA" ? "#00E5FF" : "#1f2937"}
-                    strokeWidth="2"
-                    className="transition-all"
-                  />
-                  {/* Switch Internal Lines */}
-                  <line x1="180" y1="140" x2="220" y2="140" stroke="#808A9D" strokeWidth="1.5" />
-                  <line x1="180" y1="150" x2="220" y2="150" stroke="#808A9D" strokeWidth="1.5" />
-                  <text x="200" y="148" fill="#E0E0E0" fontSize="8" fontWeight="black" textAnchor="middle" className="font-mono">SW-A</text>
-                </g>
+                    {/* Router A (Top Left) */}
+                    <g onClick={() => handleSelectNode("RouterA")} className="cursor-pointer group">
+                      <circle
+                        cx="120" cy="70" r="22"
+                        fill={selectedNode === "RouterA" ? "#1A237E" : "#0D111A"}
+                        stroke={selectedNode === "RouterA" ? "#00E5FF" : "#1f2937"}
+                        strokeWidth="2"
+                        className="transition-all"
+                      />
+                      <text x="120" y="73" fill="#E0E0E0" fontSize="9" fontWeight="black" textAnchor="middle" className="font-mono">R-A</text>
+                      <circle cx="120" cy="52" r="4.5" fill={isCompleted ? "#10b981" : (currentStepIndex > 0 ? "#f59e0b" : "#ef4444")} className="animate-pulse" />
+                    </g>
 
-                {/* Router A Node (Left) */}
-                <g
-                  onClick={() => { playSound("click"); setSelectedNode("RouterA"); }}
-                  className="cursor-pointer group"
-                >
-                  <circle
-                    cx="100" cy="80" r="24"
-                    fill={selectedNode === "RouterA" ? "#1A237E" : "#0D111A"}
-                    stroke={selectedNode === "RouterA" ? "#00E5FF" : "#1f2937"}
-                    strokeWidth="2"
-                    className="transition-all"
-                  />
-                  <text x="100" y="83" fill="#E0E0E0" fontSize="9" fontWeight="black" textAnchor="middle" className="font-mono">R-A</text>
-                  
-                  {/* Status Indicator Dot */}
-                  <circle
-                    cx="100" cy="62" r="4.5"
-                    fill={isCompleted ? "#10b981" : (currentStepIndex > 0 ? "#f59e0b" : "#ef4444")}
-                    className="animate-pulse"
-                  />
-                </g>
+                    {/* Router B (Top Right) */}
+                    <g onClick={() => handleSelectNode("RouterB")} className="cursor-pointer group">
+                      <circle
+                        cx="280" cy="70" r="22"
+                        fill={selectedNode === "RouterB" ? "#1A237E" : "#0D111A"}
+                        stroke={selectedNode === "RouterB" ? "#00E5FF" : "#1f2937"}
+                        strokeWidth="2"
+                        className="transition-all"
+                      />
+                      <text x="280" y="73" fill="#E0E0E0" fontSize="9" fontWeight="black" textAnchor="middle" className="font-mono">R-B</text>
+                      <circle cx="280" cy="52" r="4.5" fill={isCompleted ? "#10b981" : "#64748b"} />
+                    </g>
 
-                {/* Router B Node (Right) */}
-                <g
-                  onClick={() => { playSound("click"); setSelectedNode("RouterB"); }}
-                  className="cursor-pointer group"
-                >
-                  <circle
-                    cx="300" cy="80" r="24"
-                    fill={selectedNode === "RouterB" ? "#1A237E" : "#0D111A"}
-                    stroke={selectedNode === "RouterB" ? "#00E5FF" : "#1f2937"}
-                    strokeWidth="2"
-                    className="transition-all"
-                  />
-                  <text x="300" y="83" fill="#E0E0E0" fontSize="9" fontWeight="black" textAnchor="middle" className="font-mono">R-B</text>
-                  
-                  {/* Status Indicator Dot */}
-                  <circle
-                    cx="300" cy="62" r="4.5"
-                    fill={isCompleted ? "#10b981" : "#64748b"}
-                  />
-                </g>
+                    {/* Router C (Bottom Center) */}
+                    <g onClick={() => handleSelectNode("RouterC")} className="cursor-pointer group">
+                      <circle
+                        cx="200" cy="170" r="22"
+                        fill={selectedNode === "RouterC" ? "#1A237E" : "#0D111A"}
+                        stroke={selectedNode === "RouterC" ? "#00E5FF" : "#1f2937"}
+                        strokeWidth="2"
+                        className="transition-all"
+                      />
+                      <text x="200" y="173" fill="#E0E0E0" fontSize="9" fontWeight="black" textAnchor="middle" className="font-mono">R-C</text>
+                      <circle cx="200" cy="152" r="4.5" fill={isCompleted ? "#10b981" : "#64748b"} />
+                    </g>
 
-                {/* Network subnets description flags */}
-                <text x="100" y="125" fill="#808A9D" fontSize="7" fontWeight="bold" textAnchor="middle" className="font-mono">Gi0/0 [192.168.1.1]</text>
-                <text x="300" y="125" fill="#808A9D" fontSize="7" fontWeight="bold" textAnchor="middle" className="font-mono">Gi0/1 [Trunk Mode]</text>
+                    <text x="120" y="105" fill="#808A9D" fontSize="7" fontWeight="bold" textAnchor="middle" className="font-mono">10.0.1.1</text>
+                    <text x="280" y="105" fill="#808A9D" fontSize="7" fontWeight="bold" textAnchor="middle" className="font-mono">10.0.2.1</text>
+                    <text x="200" y="205" fill="#808A9D" fontSize="7" fontWeight="bold" textAnchor="middle" className="font-mono">10.0.3.1</text>
+                  </>
+                ) : currentTopology === "Access-Core Spine" ? (
+                  <>
+                    {/* Spine-Leaf Connections */}
+                    <line
+                      x1="90" y1="145" x2="140" y2="55"
+                      stroke={isCompleted ? "#00E5FF" : (selectedNode === "Leaf1" || selectedNode === "Spine1" ? "#00E5FF" : "#1A237E")}
+                      strokeWidth="2.5"
+                      strokeDasharray={isCompleted ? "0" : "4,4"}
+                    />
+                    <line
+                      x1="90" y1="145" x2="260" y2="55"
+                      stroke={isCompleted ? "#00E5FF" : (selectedNode === "Leaf1" || selectedNode === "Spine2" ? "#00E5FF" : "#1A237E")}
+                      strokeWidth="2.5"
+                      strokeDasharray={isCompleted ? "0" : "4,4"}
+                    />
+                    <line
+                      x1="200" y1="145" x2="140" y2="55"
+                      stroke={isCompleted ? "#00E5FF" : (selectedNode === "Leaf2" || selectedNode === "Spine1" ? "#00E5FF" : "#1A237E")}
+                      strokeWidth="2.5"
+                      strokeDasharray={isCompleted ? "0" : "4,4"}
+                    />
+                    <line
+                      x1="200" y1="145" x2="260" y2="55"
+                      stroke={isCompleted ? "#00E5FF" : (selectedNode === "Leaf2" || selectedNode === "Spine2" ? "#00E5FF" : "#1A237E")}
+                      strokeWidth="2.5"
+                      strokeDasharray={isCompleted ? "0" : "4,4"}
+                    />
+                    <line
+                      x1="310" y1="145" x2="140" y2="55"
+                      stroke={isCompleted ? "#00E5FF" : (selectedNode === "Leaf3" || selectedNode === "Spine1" ? "#00E5FF" : "#1A237E")}
+                      strokeWidth="2.5"
+                      strokeDasharray={isCompleted ? "0" : "4,4"}
+                    />
+                    <line
+                      x1="310" y1="145" x2="260" y2="55"
+                      stroke={isCompleted ? "#00E5FF" : (selectedNode === "Leaf3" || selectedNode === "Spine2" ? "#00E5FF" : "#1A237E")}
+                      strokeWidth="2.5"
+                      strokeDasharray={isCompleted ? "0" : "4,4"}
+                    />
+
+                    {/* Spine 1 */}
+                    <g onClick={() => handleSelectNode("Spine1")} className="cursor-pointer group">
+                      <circle
+                        cx="140" cy="55" r="18"
+                        fill={selectedNode === "Spine1" ? "#1A237E" : "#0D111A"}
+                        stroke={selectedNode === "Spine1" ? "#00E5FF" : "#1f2937"}
+                        strokeWidth="2"
+                        className="transition-all"
+                      />
+                      <text x="140" y="58" fill="#E0E0E0" fontSize="8" fontWeight="black" textAnchor="middle" className="font-mono">S-R1</text>
+                      <circle cx="140" cy="40" r="3.5" fill={isCompleted ? "#10b981" : (currentStepIndex > 0 ? "#f59e0b" : "#ef4444")} className="animate-pulse" />
+                    </g>
+
+                    {/* Spine 2 */}
+                    <g onClick={() => handleSelectNode("Spine2")} className="cursor-pointer group">
+                      <circle
+                        cx="260" cy="55" r="18"
+                        fill={selectedNode === "Spine2" ? "#1A237E" : "#0D111A"}
+                        stroke={selectedNode === "Spine2" ? "#00E5FF" : "#1f2937"}
+                        strokeWidth="2"
+                        className="transition-all"
+                      />
+                      <text x="260" y="58" fill="#E0E0E0" fontSize="8" fontWeight="black" textAnchor="middle" className="font-mono">S-R2</text>
+                      <circle cx="260" cy="40" r="3.5" fill={isCompleted ? "#10b981" : "#64748b"} />
+                    </g>
+
+                    {/* Leaf 1 */}
+                    <g onClick={() => handleSelectNode("Leaf1")} className="cursor-pointer group">
+                      <rect
+                        x="70" y="135" width="40" height="20" rx="3"
+                        fill={selectedNode === "Leaf1" ? "#1A237E" : "#0D111A"}
+                        stroke={selectedNode === "Leaf1" ? "#00E5FF" : "#1f2937"}
+                        strokeWidth="1.5"
+                        className="transition-all"
+                      />
+                      <text x="90" y="147" fill="#E0E0E0" fontSize="7" fontWeight="black" textAnchor="middle" className="font-mono">L-SW1</text>
+                    </g>
+
+                    {/* Leaf 2 */}
+                    <g onClick={() => handleSelectNode("Leaf2")} className="cursor-pointer group">
+                      <rect
+                        x="180" y="135" width="40" height="20" rx="3"
+                        fill={selectedNode === "Leaf2" ? "#1A237E" : "#0D111A"}
+                        stroke={selectedNode === "Leaf2" ? "#00E5FF" : "#1f2937"}
+                        strokeWidth="1.5"
+                        className="transition-all"
+                      />
+                      <text x="200" y="147" fill="#E0E0E0" fontSize="7" fontWeight="black" textAnchor="middle" className="font-mono">L-SW2</text>
+                    </g>
+
+                    {/* Leaf 3 */}
+                    <g onClick={() => handleSelectNode("Leaf3")} className="cursor-pointer group">
+                      <rect
+                        x="290" y="135" width="40" height="20" rx="3"
+                        fill={selectedNode === "Leaf3" ? "#1A237E" : "#0D111A"}
+                        stroke={selectedNode === "Leaf3" ? "#00E5FF" : "#1f2937"}
+                        strokeWidth="1.5"
+                        className="transition-all"
+                      />
+                      <text x="310" y="147" fill="#E0E0E0" fontSize="7" fontWeight="black" textAnchor="middle" className="font-mono">L-SW3</text>
+                    </g>
+
+                    <text x="90" y="172" fill="#808A9D" fontSize="6.5" fontWeight="bold" textAnchor="middle" className="font-mono">Leaf-1</text>
+                    <text x="200" y="172" fill="#808A9D" fontSize="6.5" fontWeight="bold" textAnchor="middle" className="font-mono">Leaf-2</text>
+                    <text x="310" y="172" fill="#808A9D" fontSize="6.5" fontWeight="bold" textAnchor="middle" className="font-mono">Leaf-3</text>
+                  </>
+                ) : (
+                  <>
+                    {/* Standard Hub Topology Connections */}
+                    <line
+                      x1="100" y1="80" x2="200" y2="150"
+                      stroke={isCompleted ? "#00E5FF" : (selectedNode === "RouterA" || selectedNode === "SwitchA" ? "#00E5FF" : "#1A237E")}
+                      strokeWidth="3.5"
+                      strokeDasharray={isCompleted ? "0" : "5,5"}
+                      className="transition-all duration-500"
+                    />
+                    <line
+                      x1="200" y1="150" x2="300" y2="80"
+                      stroke={isCompleted ? "#00E5FF" : (selectedNode === "RouterB" || selectedNode === "SwitchA" ? "#00E5FF" : "#1A237E")}
+                      strokeWidth="3.5"
+                      strokeDasharray={isCompleted ? "0" : "5,5"}
+                      className="transition-all duration-500"
+                    />
+
+                    {/* Switch A Node (Center) */}
+                    <g onClick={() => handleSelectNode("SwitchA")} className="cursor-pointer group">
+                      <rect
+                        x="175" y="130" width="50" height="30" rx="4"
+                        fill={selectedNode === "SwitchA" ? "#1A237E" : "#0D111A"}
+                        stroke={selectedNode === "SwitchA" ? "#00E5FF" : "#1f2937"}
+                        strokeWidth="2"
+                        className="transition-all"
+                      />
+                      <line x1="180" y1="140" x2="220" y2="140" stroke="#808A9D" strokeWidth="1.5" />
+                      <line x1="180" y1="150" x2="220" y2="150" stroke="#808A9D" strokeWidth="1.5" />
+                      <text x="200" y="148" fill="#E0E0E0" fontSize="8" fontWeight="black" textAnchor="middle" className="font-mono">SW-A</text>
+                    </g>
+
+                    {/* Router A Node (Left) */}
+                    <g onClick={() => handleSelectNode("RouterA")} className="cursor-pointer group">
+                      <circle
+                        cx="100" cy="80" r="24"
+                        fill={selectedNode === "RouterA" ? "#1A237E" : "#0D111A"}
+                        stroke={selectedNode === "RouterA" ? "#00E5FF" : "#1f2937"}
+                        strokeWidth="2"
+                        className="transition-all"
+                      />
+                      <text x="100" y="83" fill="#E0E0E0" fontSize="9" fontWeight="black" textAnchor="middle" className="font-mono">R-A</text>
+                      <circle
+                        cx="100" cy="62" r="4.5"
+                        fill={isCompleted ? "#10b981" : (currentStepIndex > 0 ? "#f59e0b" : "#ef4444")}
+                        className="animate-pulse"
+                      />
+                    </g>
+
+                    {/* Router B Node (Right) */}
+                    <g onClick={() => handleSelectNode("RouterB")} className="cursor-pointer group">
+                      <circle
+                        cx="300" cy="80" r="24"
+                        fill={selectedNode === "RouterB" ? "#1A237E" : "#0D111A"}
+                        stroke={selectedNode === "RouterB" ? "#00E5FF" : "#1f2937"}
+                        strokeWidth="2"
+                        className="transition-all"
+                      />
+                      <text x="300" y="83" fill="#E0E0E0" fontSize="9" fontWeight="black" textAnchor="middle" className="font-mono">R-B</text>
+                      <circle cx="300" cy="62" r="4.5" fill={isCompleted ? "#10b981" : "#64748b"} />
+                    </g>
+
+                    <text x="100" y="125" fill="#808A9D" fontSize="7" fontWeight="bold" textAnchor="middle" className="font-mono">Gi0/0 [192.168.1.1]</text>
+                    <text x="300" y="125" fill="#808A9D" fontSize="7" fontWeight="bold" textAnchor="middle" className="font-mono">Gi0/1 [Trunk Mode]</text>
+                  </>
+                )}
               </svg>
 
               {/* Absolute overlay diagnostics box */}
@@ -536,42 +811,47 @@ export const Arena: React.FC<ArenaProps> = ({ problem, onQuit, onSolve, onNextPr
               </div>
 
               {/* Terminal active prompt typing line */}
-              <div className="p-3 bg-[#0D111A] border-t border-slate-850 shrink-0">
+              <div className="p-3 bg-[#0D111A] border-t border-slate-850 shrink-0 space-y-1.5">
                 
                 {problem.steps && (
-                  <form
-                    onSubmit={handleCliSubmit}
-                    className={`flex items-center gap-2 bg-[#020204] border ${
-                      shakeInput ? "border-rose-500 ring-2 ring-rose-500/10" : "border-slate-850 focus-within:border-[#00E5FF]"
-                    } rounded-xl px-3 py-2 transition-all ${shakeInput ? "animate-[shake_0.4s_ease-in-out]" : ""}`}
-                  >
-                    <span className="text-[#00E5FF] font-mono font-bold shrink-0">
-                      {problem.steps[currentStepIndex]?.prompt}
-                    </span>
-                    
-                    <input
-                      type="text"
-                      value={cliInput}
-                      onChange={(e) => {
-                        setCliInput(e.target.value);
-                        if (Math.random() > 0.4) playSound("typing");
-                      }}
-                      className="flex-1 bg-transparent border-none outline-none focus:ring-0 p-0 text-white font-mono text-xs placeholder-slate-650"
-                      placeholder='Type config line... (e.g. "enable")'
-                      autoFocus
-                      disabled={isCompleted}
-                      autoComplete="off"
-                      autoCapitalize="off"
-                    />
-
-                    <button
-                      type="submit"
-                      disabled={isCompleted}
-                      className="bg-[#1A237E] hover:bg-[#1A237E]/80 text-[#00E5FF] px-3.5 py-1.5 rounded-lg text-[10px] font-mono font-bold tracking-wider uppercase border border-[#00E5FF]/20 transition-all cursor-pointer"
+                  <>
+                    <form
+                      onSubmit={handleCliSubmit}
+                      className={`flex items-center gap-2 bg-[#020204] border ${
+                        shakeInput ? "border-rose-500 ring-2 ring-rose-500/10" : "border-slate-850 focus-within:border-[#00E5FF]"
+                      } rounded-xl px-3 py-2 transition-all ${shakeInput ? "animate-[shake_0.4s_ease-in-out]" : ""}`}
                     >
-                      ENTER
-                    </button>
-                  </form>
+                      <span className="text-[#00E5FF] font-mono font-bold shrink-0">
+                        {problem.steps[currentStepIndex]?.prompt}
+                      </span>
+                      
+                      <input
+                        type="text"
+                        value={cliInput}
+                        onChange={(e) => {
+                          setCliInput(e.target.value);
+                          if (Math.random() > 0.4) playSound("typing");
+                        }}
+                        className="flex-1 bg-transparent border-none outline-none focus:ring-0 p-0 text-white font-mono text-xs placeholder-slate-650"
+                        placeholder='Type config line... (e.g. "enable")'
+                        autoFocus
+                        disabled={isCompleted}
+                        autoComplete="off"
+                        autoCapitalize="off"
+                      />
+
+                      <button
+                        type="submit"
+                        disabled={isCompleted}
+                        className="bg-[#1A237E] hover:bg-[#1A237E]/80 text-[#00E5FF] px-3.5 py-1.5 rounded-lg text-[10px] font-mono font-bold tracking-wider uppercase border border-[#00E5FF]/20 transition-all cursor-pointer"
+                      >
+                        ENTER
+                      </button>
+                    </form>
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center px-1 gap-1 text-[9px] font-mono text-slate-500">
+                      <span className="text-[#00E5FF]/70">Shorthands enabled: (en, conf t, int g0/0, no shut...)</span>
+                    </div>
+                  </>
                 )}
 
               </div>

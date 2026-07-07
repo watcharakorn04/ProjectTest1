@@ -23,6 +23,30 @@ const COMMANDS_DATABASE: CommandItem[] = [
     category: "Basic"
   },
   {
+    cmd: "show running-config",
+    desc: "Display the current active configuration loaded in RAM.",
+    platform: "Cisco IOS",
+    category: "Basic"
+  },
+  {
+    cmd: "copy running-config startup-config",
+    desc: "Save active configuration to non-volatile RAM (NVRAM) for persistence.",
+    platform: "Cisco IOS",
+    category: "Basic"
+  },
+  {
+    cmd: "write memory",
+    desc: "Shorthand command to save the active configuration directly to NVRAM.",
+    platform: "Cisco IOS",
+    category: "Basic"
+  },
+  {
+    cmd: "hostname Device-Name",
+    desc: "Set the administrative hostname identifier for the current device.",
+    platform: "Cisco IOS",
+    category: "Basic"
+  },
+  {
     cmd: "interface gigabitethernet0/0",
     desc: "Select physical ethernet port GigabitEthernet0/0 to configure.",
     platform: "Cisco IOS",
@@ -41,6 +65,30 @@ const COMMANDS_DATABASE: CommandItem[] = [
     category: "Interface"
   },
   {
+    cmd: "switchport mode access",
+    desc: "Configure a switch port interface to operate in permanent access mode.",
+    platform: "Cisco IOS",
+    category: "Interface"
+  },
+  {
+    cmd: "switchport access vlan 10",
+    desc: "Assign the current access switchport to virtual LAN (VLAN) ID 10.",
+    platform: "Cisco IOS",
+    category: "Interface"
+  },
+  {
+    cmd: "description Uplink-to-Core",
+    desc: "Add a descriptive documentation comment string to the interface.",
+    platform: "Cisco IOS",
+    category: "Interface"
+  },
+  {
+    cmd: "ip address dhcp",
+    desc: "Configure the interface to acquire an IP address automatically from a DHCP server.",
+    platform: "Cisco IOS",
+    category: "Interface"
+  },
+  {
     cmd: "router ospf 10",
     desc: "Initiate OSPF dynamic routing engine process ID 10.",
     platform: "Cisco IOS",
@@ -49,6 +97,24 @@ const COMMANDS_DATABASE: CommandItem[] = [
   {
     cmd: "network 10.0.0.0 0.0.0.255 area 0",
     desc: "Enable OSPF routing on matching subnets with Wildcard Mask in Area 0.",
+    platform: "Cisco IOS",
+    category: "Routing"
+  },
+  {
+    cmd: "ip route 0.0.0.0 0.0.0.0 192.168.1.254",
+    desc: "Establish a static default route pointing traffic to next-hop gateway IP.",
+    platform: "Cisco IOS",
+    category: "Routing"
+  },
+  {
+    cmd: "router rip",
+    desc: "Configure dynamic routing using the Routing Information Protocol.",
+    platform: "Cisco IOS",
+    category: "Routing"
+  },
+  {
+    cmd: "version 2",
+    desc: "Set RIP protocol version to 2 for support of classless subnets.",
     platform: "Cisco IOS",
     category: "Routing"
   },
@@ -71,6 +137,30 @@ const COMMANDS_DATABASE: CommandItem[] = [
     category: "Security"
   },
   {
+    cmd: "enable secret C1sc0123",
+    desc: "Establish an encrypted secure password for privileged EXEC mode access.",
+    platform: "Cisco IOS",
+    category: "Security"
+  },
+  {
+    cmd: "service password-encryption",
+    desc: "Encrypt all plain-text passwords stored in the configuration file.",
+    platform: "Cisco IOS",
+    category: "Security"
+  },
+  {
+    cmd: "access-list 101 permit tcp any any eq 80",
+    desc: "Create an extended IP Access Control List allowing port 80 HTTP web traffic.",
+    platform: "Cisco IOS",
+    category: "Security"
+  },
+  {
+    cmd: "ip access-group 101 in",
+    desc: "Bind Access Control List 101 inbound on the selected interface.",
+    platform: "Cisco IOS",
+    category: "Security"
+  },
+  {
     cmd: "show ip interface brief",
     desc: "List operational status and assigned IPs of all local interfaces.",
     platform: "Cisco IOS",
@@ -79,6 +169,30 @@ const COMMANDS_DATABASE: CommandItem[] = [
   {
     cmd: "show ip route",
     desc: "Display active routing topology table database entries.",
+    platform: "Cisco IOS",
+    category: "Diagnostics"
+  },
+  {
+    cmd: "ping 192.168.1.1",
+    desc: "Send ICMP echo request packets to verify network connectivity with target IP.",
+    platform: "Cisco IOS",
+    category: "Diagnostics"
+  },
+  {
+    cmd: "traceroute 8.8.8.8",
+    desc: "Identify intermediate routers and path routes to reach target host.",
+    platform: "Cisco IOS",
+    category: "Diagnostics"
+  },
+  {
+    cmd: "show interfaces description",
+    desc: "Show operational state and description tags of all interfaces.",
+    platform: "Cisco IOS",
+    category: "Diagnostics"
+  },
+  {
+    cmd: "show vlan brief",
+    desc: "Display a clean breakdown of configured VLAN IDs, names, and active switchports.",
     platform: "Cisco IOS",
     category: "Diagnostics"
   },

@@ -30,21 +30,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
   completedProblems,
 }) => {
   const { problems, currentUserState, leaderboard } = appState;
-  const [selectedDifficulty, setSelectedDifficulty] = useState<string>("All");
-  const [selectedTopic, setSelectedTopic] = useState<string>("All");
-  const [searchQuery, setSearchQuery] = useState<string>("");
 
-  // Extract all unique topics
-  const topics = ["All", ...Array.from(new Set(problems.map((p) => p.topic)))];
-
-  // Filters challenges based on filters and search
-  const filteredProblems = problems.filter((prob) => {
-    const matchesDifficulty = selectedDifficulty === "All" || prob.difficulty === selectedDifficulty;
-    const matchesTopic = selectedTopic === "All" || prob.topic === selectedTopic;
-    const matchesSearch = prob.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          prob.instructions.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesDifficulty && matchesTopic && matchesSearch;
-  });
+  // Find up to 3 recommended problems (prioritize uncompleted ones)
+  const recommendedProblems = [
+    ...problems.filter((p) => !completedProblems.includes(p.id)),
+    ...problems.filter((p) => completedProblems.includes(p.id))
+  ].slice(0, 3);
 
   const handleProblemClick = (prob: Problem) => {
     playSound("click");
@@ -54,7 +45,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   const handleQuickPlay = () => {
     playSound("complete");
-    // Select first uncompleted, or first Easy
     const target = problems.find((p) => !completedProblems.includes(p.id)) || problems[0];
     if (target) {
       onSelectProblem(target);
@@ -65,34 +55,47 @@ export const Dashboard: React.FC<DashboardProps> = ({
   return (
     <div className="space-y-6">
       {/* Welcome Banner / Hero Widget */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#1A237E] to-[#0D111A] border border-slate-800 p-6 md:p-8 shadow-lg">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0B1528] via-[#0E1B35] to-[#0A1120] border border-slate-800 p-6 md:p-8 shadow-[0_12px_40px_rgba(0,0,0,0.5)]">
         {/* Glow Effects */}
-        <div className="absolute right-0 top-0 w-64 h-64 bg-[#00E5FF] opacity-10 rounded-full filter blur-[80px] pointer-events-none" />
+        <div className="absolute right-0 top-0 w-80 h-80 bg-blue-500 opacity-[0.08] rounded-full filter blur-[100px] pointer-events-none" />
+        <div className="absolute left-1/3 bottom-0 w-60 h-60 bg-blue-400 opacity-[0.04] rounded-full filter blur-[80px] pointer-events-none" />
         
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2 max-w-lg">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#00E5FF]/10 text-[#00E5FF] text-[10px] uppercase font-mono font-bold tracking-wider">
-              <Zap className="h-3 w-3 animate-pulse" />
-              Arena Status: Active
+        <div className="relative z-10 space-y-6">
+          <div className="space-y-2 max-w-2xl">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] uppercase font-bold tracking-wider border border-emerald-500/20">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Arena Status: Compiling Online
             </div>
-            <h2 className="text-2xl md:text-3xl font-black text-white">
-              Welcome back, <span className="text-[#00E5FF]">{currentUserState.username}</span>!
+            <h2 className="text-2xl md:text-3.5xl font-extrabold tracking-tight text-white font-sans">
+              Welcome back, <span className="text-blue-400">{currentUserState.username}</span>!
             </h2>
-            <p className="text-slate-400 text-xs md:text-sm leading-relaxed">
-              Your configurations are compiling properly. Ready to test your muscle memory and solve command-line syntax syntax?
+            <p className="text-slate-400 text-xs md:text-sm font-medium leading-relaxed">
+              Ready to test your network configuration skills today? Choose an active sandbox simulation below to practice your Cisco IOS CLI command syntax.
             </p>
           </div>
 
-          {/* Points Counter Quick Widget */}
-          <div className="flex items-center gap-4 bg-[#050508]/60 backdrop-blur-md border border-slate-800 rounded-2xl p-4 shrink-0">
-            <div className="p-3 bg-gradient-to-br from-amber-500/20 to-orange-600/10 rounded-xl text-amber-400">
-              <Trophy className="h-6 w-6" />
+          {/* Points Counter Quick Widget Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2">
+            <div className="p-4 bg-[#050A14]/70 backdrop-blur-md border border-slate-800/80 rounded-2xl flex flex-col gap-1">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total XP</span>
+              <span className="text-xl font-extrabold text-blue-400 font-mono leading-none">{currentUserState.totalPoints} XP</span>
             </div>
-            <div>
-              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Network Rank</div>
-              <div className="text-xl font-black text-white font-mono flex items-baseline gap-1.5">
-                #{currentUserState.globalRank}
-                <span className="text-xs text-amber-400 font-bold">({currentUserState.totalPoints} pts)</span>
+            
+            <div className="p-4 bg-[#050A14]/70 backdrop-blur-md border border-slate-800/80 rounded-2xl flex flex-col gap-1">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Completed Labs</span>
+              <span className="text-xl font-extrabold text-emerald-400 font-mono leading-none">{completedProblems.length} / {problems.length}</span>
+            </div>
+
+            <div className="p-4 bg-[#050A14]/70 backdrop-blur-md border border-slate-800/80 rounded-2xl flex flex-col gap-1">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Global Rank</span>
+              <span className="text-xl font-extrabold text-amber-400 font-mono leading-none">#{currentUserState.globalRank}</span>
+            </div>
+
+            <div className="p-4 bg-[#050A14]/70 backdrop-blur-md border border-slate-800/80 rounded-2xl flex flex-col gap-1">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">System Status</span>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-xs font-extrabold text-white font-mono uppercase tracking-wider">ONLINE</span>
               </div>
             </div>
           </div>
@@ -152,82 +155,26 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
           </div>
 
-          {/* Filtering Workspace */}
-          <div className="bg-[#0D111A] border border-slate-800 rounded-2xl p-5 space-y-4">
-            
-            {/* Header & Search */}
-            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+          {/* Recommended Challenges */}
+          <div className="bg-[#0D111A] border border-slate-800 rounded-2xl p-5 md:p-6 space-y-4">
+            <div className="flex justify-between items-center pb-2 border-b border-slate-900">
               <div className="flex items-center gap-2">
-                <Filter className="h-4.5 w-4.5 text-[#00E5FF]" />
+                <BookOpen className="h-4.5 w-4.5 text-blue-400" />
                 <h3 className="text-sm font-black text-white uppercase tracking-wider font-mono">
-                  Challenge Arena Feed
+                  Recommended Challenges
                 </h3>
               </div>
-              {/* Search Bar */}
-              <div className="relative">
-                <Search className="absolute inset-y-0 left-0 pl-2.5 flex items-center text-slate-600 h-4.5 w-4.5 self-center" />
-                <input
-                  type="text"
-                  placeholder="Search challenges..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full sm:w-56 bg-[#020204] border border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-[#E0E0E0] placeholder-slate-600 focus:outline-none focus:border-[#00E5FF] font-mono"
-                />
-              </div>
+              <button
+                onClick={() => { playSound("click"); onNavigate("arena"); }}
+                className="text-[10px] font-bold text-blue-400 hover:text-blue-300 uppercase tracking-wider flex items-center gap-1 cursor-pointer"
+              >
+                View Catalog <ArrowUpRight className="h-3 w-3" />
+              </button>
             </div>
 
-            {/* Filter Pill Controls */}
-            <div className="flex flex-col gap-3 pt-2 border-t border-slate-900">
-              {/* Topic Filters */}
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mr-1">
-                  Topic:
-                </span>
-                {topics.map((topic) => (
-                  <button
-                    key={topic}
-                    onClick={() => { playSound("click"); setSelectedTopic(topic); }}
-                    className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
-                      selectedTopic === topic
-                        ? "bg-[#1A237E] text-[#00E5FF] border border-[#00E5FF]/30"
-                        : "bg-[#020204] text-slate-400 border border-slate-800 hover:border-slate-700 hover:text-slate-200"
-                    }`}
-                  >
-                    {topic}
-                  </button>
-                ))}
-              </div>
-
-              {/* Difficulty Filters */}
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mr-1">
-                  Rating:
-                </span>
-                {["All", "Easy", "Medium", "Hard"].map((diff) => (
-                  <button
-                    key={diff}
-                    onClick={() => { playSound("click"); setSelectedDifficulty(diff); }}
-                    className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
-                      selectedDifficulty === diff
-                        ? "bg-slate-800 text-white border border-slate-700"
-                        : "bg-[#020204] text-slate-400 border border-slate-800 hover:border-slate-700 hover:text-slate-200"
-                    }`}
-                  >
-                    {diff}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-          </div>
-
-          {/* Feed Card Grid */}
-          <div className="space-y-3.5">
-            {filteredProblems.length > 0 ? (
-              filteredProblems.map((prob) => {
+            <div className="space-y-3.5">
+              {recommendedProblems.map((prob) => {
                 const isCompleted = completedProblems.includes(prob.id);
-                
-                // Set badge colors based on difficulty
                 let diffBadgeColor = "text-emerald-400 bg-emerald-950/30 border-emerald-900/50";
                 if (prob.difficulty === "Medium") {
                   diffBadgeColor = "text-amber-400 bg-amber-950/30 border-amber-900/50";
@@ -239,59 +186,35 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   <div
                     key={prob.id}
                     onClick={() => handleProblemClick(prob)}
-                    className="group bg-[#0D111A] border border-slate-800 hover:border-[#00E5FF]/40 rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all hover:shadow-[0_4px_12px_rgba(0,229,255,0.02)] cursor-pointer"
+                    className="group bg-[#050A14]/40 border border-slate-850 hover:border-blue-500/40 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all hover:bg-[#050A14]/70 cursor-pointer"
                   >
                     <div className="space-y-2 flex-1">
-                      {/* Badge line */}
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className={`text-[10px] font-bold uppercase tracking-wider border rounded px-1.5 py-0.5 ${diffBadgeColor}`}>
+                        <span className={`text-[9px] font-bold uppercase tracking-wider border rounded px-1.5 py-0.5 ${diffBadgeColor}`}>
                           {prob.difficulty}
                         </span>
-                        <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-900 border border-slate-800 text-slate-400 px-1.5 py-0.5 rounded">
+                        <span className="text-[9px] font-bold uppercase tracking-wider bg-slate-900 border border-slate-800 text-slate-400 px-1.5 py-0.5 rounded">
                           {prob.topic}
                         </span>
-                        <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-900 border border-slate-800 text-slate-400 px-1.5 py-0.5 rounded font-mono">
-                          Format: {prob.format}
-                        </span>
                         {isCompleted && (
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded-full flex items-center gap-1">
-                            <CheckCircle className="h-3 w-3 fill-emerald-400 text-emerald-950" /> SOLVED
+                          <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-400 bg-emerald-950/40 px-1.5 py-0.5 rounded-full flex items-center gap-1">
+                            <CheckCircle className="h-2.5 w-2.5 fill-emerald-400 text-emerald-950" /> SOLVED
                           </span>
                         )}
                       </div>
 
-                      {/* Title */}
-                      <h4 className="text-base font-extrabold text-white group-hover:text-[#00E5FF] transition-colors leading-snug">
+                      <h4 className="text-sm font-extrabold text-white group-hover:text-blue-400 transition-colors leading-snug">
                         {prob.title}
                       </h4>
-
-                      {/* Instructions snippet */}
-                      <p className="text-xs text-slate-400 font-medium line-clamp-1 leading-relaxed">
-                        {prob.instructions}
-                      </p>
                     </div>
 
-                    {/* Metadata right-side */}
-                    <div className="flex items-center justify-between md:flex-col md:items-end gap-2 shrink-0 md:pl-4 border-t md:border-t-0 md:border-l border-slate-800 pt-3 md:pt-0">
-                      <div className="text-[11px] text-slate-500 font-medium">
-                        By <span className="text-[#808A9D] font-bold">{prob.author}</span>
-                      </div>
-                      
-                      <div className="text-[#00E5FF] font-mono font-bold text-xs flex items-center gap-1 group-hover:underline">
-                        Launch Terminal
-                        <Terminal className="h-3.5 w-3.5" />
-                      </div>
+                    <div className="text-blue-400 font-bold text-xs flex items-center gap-1 group-hover:underline shrink-0 sm:pl-3 border-t sm:border-t-0 sm:border-l border-slate-850 pt-2.5 sm:pt-0">
+                      Launch <Terminal className="h-3 w-3" />
                     </div>
                   </div>
                 );
-              })
-            ) : (
-              <div className="text-center py-12 bg-[#0D111A] border border-slate-800 rounded-2xl text-slate-500 space-y-2">
-                <Terminal className="h-10 w-10 mx-auto text-slate-750" />
-                <p className="font-extrabold text-[#E0E0E0] text-sm">No command syntax matches your query.</p>
-                <p className="text-xs">Try adjusting your filters or search keywords.</p>
-              </div>
-            )}
+              })}
+            </div>
           </div>
 
         </div>

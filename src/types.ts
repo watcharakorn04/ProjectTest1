@@ -3,6 +3,12 @@ export interface UserState {
   mockRole: "Student" | "Tutor" | "Admin";
   totalPoints: number;
   globalRank: number;
+  fullName?: string;
+  bio?: string;
+  targetCert?: string;
+  experienceLevel?: string;
+  terminalTheme?: string;
+  status?: "Active" | "Suspended";
 }
 
 export interface Step {
@@ -28,6 +34,7 @@ export interface Problem {
   instructions: string;
   steps?: Step[];
   blankLines?: BlankLine[];
+  topology?: string;
 }
 
 export interface LeaderboardEntry {
@@ -41,4 +48,5 @@ export interface AppState {
   currentUserState: UserState;
   problems: Problem[];
   leaderboard: LeaderboardEntry[];
+  users?: UserState[];
 }

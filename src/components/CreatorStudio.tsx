@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Problem, Step, BlankLine } from "../types";
+import React, { useState, useEffect } from "react";
+import { Problem, Step, BlankLine, UserState } from "../types";
 import { playSound } from "../utils/audio";
 import {
   Sparkles,
@@ -18,9 +18,168 @@ import {
 interface CreatorStudioProps {
   onPublish: (problem: Problem) => void;
   onCancel: () => void;
+  problemToEdit?: Problem;
+  currentUser?: UserState;
 }
 
-export const CreatorStudio: React.FC<CreatorStudioProps> = ({ onPublish, onCancel }) => {
+export const TopologyPreview: React.FC<{ name: string }> = ({ name }) => {
+  return (
+    <div className="bg-[#020204] border border-slate-850 rounded-xl p-4 flex items-center justify-center relative overflow-hidden min-h-[180px]">
+      <svg viewBox="0 0 400 220" className="w-full max-w-xs h-full">
+        {name === "Ring Topology" ? (
+          <>
+            {/* Ring Topology Connection Links */}
+            <line
+              x1="120" y1="60" x2="280" y2="60"
+              stroke="#1A237E"
+              strokeWidth="3.5"
+              strokeDasharray="5,5"
+              className="transition-all duration-500"
+            />
+            <line
+              x1="280" y1="60" x2="200" y2="160"
+              stroke="#1A237E"
+              strokeWidth="3.5"
+              strokeDasharray="5,5"
+              className="transition-all duration-500"
+            />
+            <line
+              x1="200" y1="160" x2="120" y2="60"
+              stroke="#1A237E"
+              strokeWidth="3.5"
+              strokeDasharray="5,5"
+              className="transition-all duration-500"
+            />
+
+            {/* Router A (Top Left) */}
+            <g>
+              <circle
+                cx="120" cy="60" r="22"
+                fill="#0D111A"
+                stroke="#00E5FF"
+                strokeWidth="2"
+              />
+              <text x="120" y="63" fill="#E0E0E0" fontSize="9" fontWeight="black" textAnchor="middle" className="font-mono">R-A</text>
+              <circle cx="120" cy="42" r="3.5" fill="#10b981" />
+            </g>
+
+            {/* Router B (Top Right) */}
+            <g>
+              <circle
+                cx="280" cy="60" r="22"
+                fill="#0D111A"
+                stroke="#1f2937"
+                strokeWidth="2"
+              />
+              <text x="280" y="63" fill="#E0E0E0" fontSize="9" fontWeight="black" textAnchor="middle" className="font-mono">R-B</text>
+              <circle cx="280" cy="42" r="3.5" fill="#64748b" />
+            </g>
+
+            {/* Router C (Bottom Center) */}
+            <g>
+              <circle
+                cx="200" cy="160" r="22"
+                fill="#0D111A"
+                stroke="#1f2937"
+                strokeWidth="2"
+              />
+              <text x="200" y="163" fill="#E0E0E0" fontSize="9" fontWeight="black" textAnchor="middle" className="font-mono">R-C</text>
+              <circle cx="200" cy="142" r="3.5" fill="#64748b" />
+            </g>
+
+            <text x="120" y="95" fill="#808A9D" fontSize="7" fontWeight="bold" textAnchor="middle" className="font-mono">10.0.1.1</text>
+            <text x="280" y="95" fill="#808A9D" fontSize="7" fontWeight="bold" textAnchor="middle" className="font-mono">10.0.2.1</text>
+            <text x="200" y="195" fill="#808A9D" fontSize="7" fontWeight="bold" textAnchor="middle" className="font-mono">10.0.3.1</text>
+          </>
+        ) : name === "Access-Core Spine" ? (
+          <>
+            {/* Spine-Leaf Connections */}
+            <line x1="90" y1="135" x2="140" y2="55" stroke="#1A237E" strokeWidth="2.5" strokeDasharray="4,4" />
+            <line x1="90" y1="135" x2="260" y2="55" stroke="#1A237E" strokeWidth="2.5" strokeDasharray="4,4" />
+            <line x1="200" y1="135" x2="140" y2="55" stroke="#1A237E" strokeWidth="2.5" strokeDasharray="4,4" />
+            <line x1="200" y1="135" x2="260" y2="55" stroke="#1A237E" strokeWidth="2.5" strokeDasharray="4,4" />
+            <line x1="310" y1="135" x2="140" y2="55" stroke="#1A237E" strokeWidth="2.5" strokeDasharray="4,4" />
+            <line x1="310" y1="135" x2="260" y2="55" stroke="#1A237E" strokeWidth="2.5" strokeDasharray="4,4" />
+
+            {/* Spine 1 */}
+            <g>
+              <circle cx="140" cy="55" r="18" fill="#0D111A" stroke="#00E5FF" strokeWidth="2" />
+              <text x="140" y="58" fill="#E0E0E0" fontSize="8" fontWeight="black" textAnchor="middle" className="font-mono">S-R1</text>
+              <circle cx="140" cy="40" r="3.5" fill="#10b981" />
+            </g>
+
+            {/* Spine 2 */}
+            <g>
+              <circle cx="260" cy="55" r="18" fill="#0D111A" stroke="#1f2937" strokeWidth="2" />
+              <text x="260" y="58" fill="#E0E0E0" fontSize="8" fontWeight="black" textAnchor="middle" className="font-mono">S-R2</text>
+              <circle cx="260" cy="40" r="3.5" fill="#64748b" />
+            </g>
+
+            {/* Leaf 1 */}
+            <g>
+              <rect x="70" y="125" width="40" height="20" rx="3" fill="#0D111A" stroke="#1f2937" strokeWidth="1.5" />
+              <text x="90" y="137" fill="#E0E0E0" fontSize="7" fontWeight="black" textAnchor="middle" className="font-mono">L-SW1</text>
+            </g>
+
+            {/* Leaf 2 */}
+            <g>
+              <rect x="180" y="125" width="40" height="20" rx="3" fill="#0D111A" stroke="#1f2937" strokeWidth="1.5" />
+              <text x="200" y="137" fill="#E0E0E0" fontSize="7" fontWeight="black" textAnchor="middle" className="font-mono">L-SW2</text>
+            </g>
+
+            {/* Leaf 3 */}
+            <g>
+              <rect x="290" y="125" width="40" height="20" rx="3" fill="#0D111A" stroke="#1f2937" strokeWidth="1.5" />
+              <text x="310" y="137" fill="#E0E0E0" fontSize="7" fontWeight="black" textAnchor="middle" className="font-mono">L-SW3</text>
+            </g>
+
+            <text x="90" y="162" fill="#808A9D" fontSize="6.5" fontWeight="bold" textAnchor="middle" className="font-mono">Leaf-1</text>
+            <text x="200" y="162" fill="#808A9D" fontSize="6.5" fontWeight="bold" textAnchor="middle" className="font-mono">Leaf-2</text>
+            <text x="310" y="162" fill="#808A9D" fontSize="6.5" fontWeight="bold" textAnchor="middle" className="font-mono">Leaf-3</text>
+          </>
+        ) : (
+          <>
+            {/* Standard Hub Topology Connections */}
+            <line x1="100" y1="80" x2="200" y2="150" stroke="#1A237E" strokeWidth="3.5" strokeDasharray="5,5" />
+            <line x1="200" y1="150" x2="300" y2="80" stroke="#1A237E" strokeWidth="3.5" strokeDasharray="5,5" />
+
+            {/* Switch A Node (Center) */}
+            <g>
+              <rect x="175" y="130" width="50" height="30" rx="4" fill="#0D111A" stroke="#1f2937" strokeWidth="2" />
+              <line x1="180" y1="140" x2="220" y2="140" stroke="#808A9D" strokeWidth="1.5" />
+              <line x1="180" y1="150" x2="220" y2="150" stroke="#808A9D" strokeWidth="1.5" />
+              <text x="200" y="148" fill="#E0E0E0" fontSize="8" fontWeight="black" textAnchor="middle" className="font-mono">SW-A</text>
+            </g>
+
+            {/* Router A Node (Left) */}
+            <g>
+              <circle cx="100" cy="80" r="24" fill="#0D111A" stroke="#00E5FF" strokeWidth="2" />
+              <text x="100" y="83" fill="#E0E0E0" fontSize="9" fontWeight="black" textAnchor="middle" className="font-mono">R-A</text>
+              <circle cx="100" cy="62" r="4.5" fill="#10b981" />
+            </g>
+
+            {/* Router B Node (Right) */}
+            <g>
+              <circle cx="300" cy="80" r="24" fill="#0D111A" stroke="#1f2937" strokeWidth="2" />
+              <text x="300" y="83" fill="#E0E0E0" fontSize="9" fontWeight="black" textAnchor="middle" className="font-mono">R-B</text>
+              <circle cx="300" cy="62" r="4.5" fill="#64748b" />
+            </g>
+
+            <text x="100" y="125" fill="#808A9D" fontSize="7" fontWeight="bold" textAnchor="middle" className="font-mono">Gi0/0 [192.168.1.1]</text>
+            <text x="300" y="125" fill="#808A9D" fontSize="7" fontWeight="bold" textAnchor="middle" className="font-mono">Gi0/1 [Trunk Mode]</text>
+          </>
+        )}
+      </svg>
+    </div>
+  );
+};
+
+export const CreatorStudio: React.FC<CreatorStudioProps> = ({
+  onPublish,
+  onCancel,
+  problemToEdit,
+  currentUser,
+}) => {
   // Wizard steps: 1 = Metadata, 2 = Code Editor Syntax, 3 = Publish & Finish
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [format, setFormat] = useState<"typing" | "blanks">("typing");
@@ -46,6 +205,22 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({ onPublish, onCance
     { lineIndex: 0, textBefore: "ip domain-name", blankValue: "forge.net", textAfter: "" },
     { lineIndex: 1, textBefore: "crypto", blankValue: "key", textAfter: "generate rsa modulus 1024" },
   ]);
+
+  useEffect(() => {
+    if (problemToEdit) {
+      setTitle(problemToEdit.title);
+      setTopic(problemToEdit.topic);
+      setDifficulty(problemToEdit.difficulty);
+      setInstructions(problemToEdit.instructions);
+      setFormat(problemToEdit.format);
+      setTopologyTemplate(problemToEdit.topology || "Standard Hub");
+      if (problemToEdit.format === "typing" && problemToEdit.steps) {
+        setTypingSteps(problemToEdit.steps);
+      } else if (problemToEdit.format === "blanks" && problemToEdit.blankLines) {
+        setBlankLines(problemToEdit.blankLines);
+      }
+    }
+  }, [problemToEdit]);
 
   // Loading/Publishing Status
   const [isPublishing, setIsPublishing] = useState<boolean>(false);
@@ -201,13 +376,14 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({ onPublish, onCance
 
       // Compile final problem object
       const finalProblem: Problem = {
-        id: `prob_${Date.now()}`,
+        id: problemToEdit ? problemToEdit.id : `prob_${Date.now()}`,
         title,
         topic,
         difficulty,
-        author: "NetCadet_99", // Current callsing
+        author: problemToEdit ? problemToEdit.author : (currentUser?.username || "NetCadet_99"),
         format,
         instructions,
+        topology: topologyTemplate,
         ...(format === "typing" ? { steps: typingSteps } : { blankLines }),
       };
 
@@ -226,10 +402,10 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({ onPublish, onCance
       <div className="flex justify-between items-center bg-[#0D111A] border border-slate-800 rounded-2xl p-5">
         <div>
           <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest font-mono">
-            PROBLEM WRITER SUITE
+            {problemToEdit ? "CHALLENGE MAINTENANCE" : "PROBLEM WRITER SUITE"}
           </span>
           <h2 className="text-base font-black text-white uppercase tracking-tight">
-            Creator Studio Workspace
+            {problemToEdit ? `Edit Challenge: ${problemToEdit.title}` : "Creator Studio Workspace"}
           </h2>
         </div>
         <button
@@ -237,7 +413,7 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({ onPublish, onCance
           className="px-3.5 py-1.5 rounded-xl bg-[#050508] hover:bg-slate-900 border border-slate-800 text-slate-400 hover:text-white text-xs font-mono font-bold transition-all cursor-pointer"
           disabled={isPublishing}
         >
-          DISCARD DRAFT
+          {problemToEdit ? "CANCEL EDIT" : "DISCARD DRAFT"}
         </button>
       </div>
 
@@ -458,6 +634,14 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({ onPublish, onCance
                       </div>
                     );
                   })}
+                </div>
+
+                {/* Live visual preview card for selected topology */}
+                <div className="pt-2">
+                  <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                    Selected Topology Preview
+                  </span>
+                  <TopologyPreview name={topologyTemplate} />
                 </div>
               </div>
 
@@ -725,61 +909,82 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({ onPublish, onCance
             </h3>
           </div>
 
-          <div className="bg-[#050508] border border-slate-850 rounded-2xl p-5 space-y-4">
-            <div>
-              <span className="text-[10px] text-slate-500 uppercase tracking-wider font-mono block">Challenge Scope Draft</span>
-              <h4 className="text-lg font-black text-white">{title}</h4>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 bg-[#050508] border border-slate-850 rounded-2xl p-5">
+            <div className="lg:col-span-2 space-y-4">
+              <div>
+                <span className="text-[10px] text-slate-500 uppercase tracking-wider font-mono block">Challenge Scope Draft</span>
+                <h4 className="text-lg font-black text-white">{title}</h4>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 font-mono text-xs text-slate-400 border-t border-b border-slate-900 py-3">
+                <div>
+                  <span className="text-slate-600 block text-[9px] font-bold uppercase">CATEGORY</span>
+                  <span className="text-[#00E5FF] font-bold">{topic}</span>
+                </div>
+                <div>
+                  <span className="text-slate-600 block text-[9px] font-bold uppercase">GRADE DIFFICULTY</span>
+                  <span className="text-amber-400 font-bold">{difficulty}</span>
+                </div>
+                <div>
+                  <span className="text-slate-600 block text-[9px] font-bold uppercase">FORMAT</span>
+                  <span className="text-white font-bold uppercase">{format}</span>
+                </div>
+                <div>
+                  <span className="text-slate-600 block text-[9px] font-bold uppercase">VISUAL STAGE</span>
+                  <span className="text-violet-400 font-bold">{topologyTemplate}</span>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <span className="text-[9px] text-slate-500 font-mono font-bold uppercase">Draft Instructions</span>
+                <p className="text-xs text-slate-350 leading-relaxed">{instructions}</p>
+              </div>
+
+              {/* Steps Preview list */}
+              <div className="space-y-2">
+                <span className="text-[9px] text-slate-500 font-mono font-bold uppercase">
+                  Compiled Solution Script Summary ({format === "typing" ? typingSteps.length : blankLines.length} lines)
+                </span>
+                
+                <div className="max-h-40 overflow-y-auto bg-[#020204] border border-slate-900 rounded-lg p-3 font-mono text-[11px] text-slate-400 space-y-1 leading-relaxed">
+                  {format === "typing" ? (
+                    typingSteps.map((st, i) => (
+                      <div key={i} className="flex gap-2">
+                        <span className="text-slate-600 font-bold">Line {i+1}:</span>
+                        <span className="text-[#00E5FF]">{st.prompt}</span>
+                        <span className="text-white">{st.expectedInput}</span>
+                      </div>
+                    ))
+                  ) : (
+                    blankLines.map((line, i) => (
+                      <div key={i} className="flex gap-2">
+                        <span className="text-slate-600 font-bold">Line {i+1}:</span>
+                        <span>{line.textBefore}</span>
+                        <span className="text-amber-400">[{line.blankValue}]</span>
+                        <span>{line.textAfter}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 font-mono text-xs text-slate-400 border-t border-b border-slate-900 py-3">
+            {/* Right column: Topology preview */}
+            <div className="lg:col-span-1 flex flex-col justify-between space-y-4 lg:border-l lg:border-slate-900 lg:pl-6 pt-4 lg:pt-0">
               <div>
-                <span className="text-slate-600 block text-[9px] font-bold uppercase">CATEGORY</span>
-                <span className="text-[#00E5FF] font-bold">{topic}</span>
+                <span className="text-[10px] text-slate-500 uppercase tracking-wider font-mono block mb-2">Live Topology Visual Preview</span>
+                <TopologyPreview name={topologyTemplate} />
               </div>
-              <div>
-                <span className="text-slate-600 block text-[9px] font-bold uppercase">GRADE DIFFICULTY</span>
-                <span className="text-amber-400 font-bold">{difficulty}</span>
-              </div>
-              <div>
-                <span className="text-slate-600 block text-[9px] font-bold uppercase">FORMAT</span>
-                <span className="text-white font-bold uppercase">{format}</span>
-              </div>
-              <div>
-                <span className="text-slate-600 block text-[9px] font-bold uppercase">VISUAL STAGE</span>
-                <span className="text-violet-400 font-bold">{topologyTemplate}</span>
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <span className="text-[9px] text-slate-500 font-mono font-bold uppercase">Draft Instructions</span>
-              <p className="text-xs text-slate-350 leading-relaxed">{instructions}</p>
-            </div>
-
-            {/* Steps Preview list */}
-            <div className="space-y-2">
-              <span className="text-[9px] text-slate-500 font-mono font-bold uppercase">
-                Compiled Solution Script Summary ({format === "typing" ? typingSteps.length : blankLines.length} lines)
-              </span>
-              
-              <div className="max-h-40 overflow-y-auto bg-[#020204] border border-slate-900 rounded-lg p-3 font-mono text-[11px] text-slate-400 space-y-1 leading-relaxed">
-                {format === "typing" ? (
-                  typingSteps.map((st, i) => (
-                    <div key={i} className="flex gap-2">
-                      <span className="text-slate-600 font-bold">Line {i+1}:</span>
-                      <span className="text-[#00E5FF]">{st.prompt}</span>
-                      <span className="text-white">{st.expectedInput}</span>
-                    </div>
-                  ))
-                ) : (
-                  blankLines.map((line, i) => (
-                    <div key={i} className="flex gap-2">
-                      <span className="text-slate-600 font-bold">Line {i+1}:</span>
-                      <span>{line.textBefore}</span>
-                      <span className="text-amber-400">[{line.blankValue}]</span>
-                      <span>{line.textAfter}</span>
-                    </div>
-                  ))
-                )}
+              <div className="bg-[#020204] border border-slate-900/60 p-3 rounded-xl space-y-1">
+                <span className="text-[9px] font-black text-slate-500 uppercase font-mono tracking-widest block">Topology Spec:</span>
+                <p className="text-[10px] text-[#00E5FF] font-mono font-bold">{topologyTemplate}</p>
+                <p className="text-[9px] text-slate-650 font-semibold leading-normal">
+                  {topologyTemplate === "Ring Topology" 
+                    ? "Three routers connected in a circular ring format. Perfect for exploring loop mitigation, loopback routing, or dynamic security policies."
+                    : topologyTemplate === "Access-Core Spine"
+                    ? "Two high-speed core spine routers dynamically routing traffic to three separate leaf switches. Ideal for core trunking, trunk encapsulation, or OSPF dynamic parameters."
+                    : "Standard star topology containing a single central high-speed routing switch. Great for general static ip gateway configuration."}
+                </p>
               </div>
             </div>
           </div>

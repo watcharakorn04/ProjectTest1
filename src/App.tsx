@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { Auth } from "./components/Auth";
 import { Dashboard } from "./components/Dashboard";
+import { Challenges } from "./components/Challenges";
 import { Arena } from "./components/Arena";
 import { CreatorStudio } from "./components/CreatorStudio";
 import { Leaderboard } from "./components/Leaderboard";
 import { CheatSheet } from "./components/CheatSheet";
 import { OperatorSettings } from "./components/OperatorSettings";
+import { UserManagement } from "./components/UserManagement";
 import { initialAppState } from "./mockData";
 import { AppState, Problem, UserState } from "./types";
 import { playSound } from "./utils/audio";
@@ -23,7 +25,9 @@ import {
   Zap,
   Info,
   BookOpen,
-  Settings
+  Settings,
+  User,
+  Users
 } from "lucide-react";
 
 export default function App() {
@@ -43,7 +47,27 @@ export default function App() {
     const saved = localStorage.getItem("netforge_state");
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved) as AppState;
+        if (parsed && Array.isArray(parsed.problems)) {
+          const mergedProblems = [...parsed.problems];
+          initialAppState.problems.forEach((defaultProb) => {
+            const existingIdx = mergedProblems.findIndex((p) => p.id === defaultProb.id);
+            if (existingIdx !== -1) {
+              // Sync the latest metadata, instructions, and correct answers
+              mergedProblems[existingIdx] = {
+                ...mergedProblems[existingIdx],
+                ...defaultProb
+              };
+            } else {
+              mergedProblems.push(defaultProb);
+            }
+          });
+          parsed.problems = mergedProblems;
+        }
+        if (!parsed.users || parsed.users.length === 0) {
+          parsed.users = initialAppState.users;
+        }
+        return parsed;
       } catch {}
     }
     return initialAppState;
@@ -63,8 +87,11 @@ export default function App() {
   // Currently loaded active challenge
   const [activeProblem, setActiveProblem] = useState<Problem | null>(null);
 
+  // Currently being edited challenge
+  const [editingProblem, setEditingProblem] = useState<Problem | null>(null);
+
   // Active Navigation Tab
-  const [activeTab, setActiveTab] = useState<"dashboard" | "arena" | "creator" | "leaderboard" | "cheatsheet" | "settings">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "arena" | "creator" | "leaderboard" | "cheatsheet" | "settings" | "myprofile" | "manage_users">("dashboard");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Save states to local storage on changes
@@ -158,12 +185,23 @@ export default function App() {
     }
   };
 
-  const handlePublishProblem = (newProblem: Problem) => {
-    // Append newly drafted problem to the list
-    setAppState((prev) => ({
-      ...prev,
-      problems: [newProblem, ...prev.problems],
-    }));
+  const handlePublishProblem = (publishedProblem: Problem) => {
+    setAppState((prev) => {
+      const exists = prev.problems.some((p) => p.id === publishedProblem.id);
+      let updatedProblems;
+      if (exists) {
+        updatedProblems = prev.problems.map((p) =>
+          p.id === publishedProblem.id ? publishedProblem : p
+        );
+      } else {
+        updatedProblems = [publishedProblem, ...prev.problems];
+      }
+      return {
+        ...prev,
+        problems: updatedProblems,
+      };
+    });
+    setEditingProblem(null);
     setActiveTab("dashboard");
   };
 
@@ -200,6 +238,13 @@ export default function App() {
         leaderboard: updatedLeaderboard,
       };
     });
+  };
+
+  const handleUpdateUsers = (updatedList: UserState[]) => {
+    setAppState((prev) => ({
+      ...prev,
+      users: updatedList
+    }));
   };
 
   const handleResetProgress = () => {
@@ -246,36 +291,103 @@ export default function App() {
     return <Auth onLoginSuccess={handleLogin} />;
   }
 
+  const theme = currentUser?.terminalTheme || "Cyan";
+  let avatarBg = "bg-blue-500/10";
+  let avatarBorder = "border-[#00E5FF]/25";
+  let avatarText = "text-[#00E5FF]";
+  let avatarDot = "bg-[#00E5FF]";
+
+  if (theme === "Emerald") {
+    avatarBg = "bg-emerald-500/10";
+    avatarBorder = "border-emerald-500/25";
+    avatarText = "text-emerald-400";
+    avatarDot = "bg-emerald-500";
+  } else if (theme === "Amber") {
+    avatarBg = "bg-amber-500/10";
+    avatarBorder = "border-amber-500/25";
+    avatarText = "text-amber-400";
+    avatarDot = "bg-amber-500";
+  } else if (theme === "Ruby") {
+    avatarBg = "bg-rose-500/10";
+    avatarBorder = "border-rose-500/25";
+    avatarText = "text-rose-400";
+    avatarDot = "bg-rose-500";
+  }
+
   return (
     <div className="min-h-screen bg-[#050508] text-[#E0E0E0] flex flex-col md:flex-row font-sans selection:bg-[#00E5FF]/20 selection:text-[#00E5FF]">
       
       {/* DESKTOP SIDEBAR NAVIGATION */}
-      <aside className="hidden md:flex flex-col w-64 bg-[#0D111A] border-r border-slate-850 h-screen sticky top-0 z-40 p-5 shrink-0 justify-between">
+      <aside className="hidden md:flex flex-col w-64 bg-[#0A1120] border-r border-slate-800/80 h-screen sticky top-0 z-40 p-5 shrink-0 justify-between">
         
         <div className="space-y-6">
           {/* Brand Logo */}
-          <div className="flex items-center gap-3 pb-4 border-b border-slate-900">
-            <div className="p-2 rounded-xl bg-[#1A237E]/30 border border-[#00E5FF]/30 text-[#00E5FF]">
-              <Cpu className="h-5 w-5 animate-pulse" />
+          <div className="flex items-start gap-3 pb-2">
+            <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 shrink-0">
+              <Cpu className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="text-lg font-black tracking-tight text-white leading-none font-mono">
-                NET<span className="text-[#00E5FF]">FORGE</span>
-              </h1>
-              <span className="text-[9px] font-mono font-bold text-slate-500 uppercase tracking-widest block mt-1">
-                GAMIFIED CLI CORE
+              <div className="flex items-center gap-1.5">
+                <span className="text-base font-black text-white tracking-wider">NETFORGE</span>
+                <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-blue-600/20 text-[#00E5FF] tracking-wider uppercase">ARENA</span>
+              </div>
+              <span className="text-[10px] text-slate-500 block mt-0.5 font-medium leading-tight">
+                Network configuration training
               </span>
             </div>
           </div>
 
-          {/* Navigation Items (6 Menus) */}
-          <nav className="flex flex-col gap-1.5">
+          {/* User Profile Card (Glow and design matching screenshot) */}
+          <div className="p-4 rounded-2xl bg-[#0B1528]/80 border border-slate-800/60 space-y-3">
+            <div className="flex items-center gap-3">
+              {/* Dynamic Theme Avatar Icon */}
+              <div className={`w-10 h-10 rounded-full ${avatarBg} border ${avatarBorder} flex items-center justify-center ${avatarText} font-bold shrink-0 relative`}>
+                <div className={`w-2.5 h-2.5 rounded-full ${avatarDot} absolute -bottom-0.5 -right-0.5 border-2 border-[#0A1120]`} />
+                <User className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-extrabold text-white truncate leading-none mb-1.5">
+                  {currentUser.username}
+                </div>
+                <div className="flex flex-wrap items-center gap-1">
+                  <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-blue-600/20 text-blue-400 font-mono">
+                    LV 1
+                  </span>
+                  <span className="text-[8px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono uppercase tracking-wider">
+                    {currentUser.mockRole === "Student" ? "CADET" : currentUser.mockRole === "Tutor" ? "INSTRUCTOR" : "SYSADMIN"}
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-semibold font-mono">
+                    Rank #{currentUser.globalRank}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* XP progress bar */}
+            <div className="space-y-1">
+              <div className="flex justify-between text-[10px] text-slate-400 font-semibold">
+                <span>XP Progress</span>
+                <span className="font-mono">{currentUser.totalPoints}/1000</span>
+              </div>
+              <div className="h-1.5 w-full bg-[#050A14] rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                  style={{ width: `${Math.min(100, (currentUser.totalPoints / 1000) * 100)}%` }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Navigation Items */}
+          <nav className="flex flex-col gap-1">
             {[
-              { id: "dashboard", label: "Arena Hub", icon: LayoutDashboard },
-              { id: "arena", label: "Gameplay Arena", icon: Terminal, badge: activeProblem ? "Active" : undefined },
-              { id: "creator", label: "Creator Studio", icon: PlusCircle },
+              { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+              { id: "arena", label: "Challenges", icon: BookOpen, badge: activeProblem ? "Active" : undefined },
+              ...(currentUser.mockRole === "Admin" ? [{ id: "manage_users", label: "Manage Users", icon: Users }] : []),
+              { id: "creator", label: "Create", icon: PlusCircle },
               { id: "leaderboard", label: "Leaderboard", icon: Trophy },
-              { id: "cheatsheet", label: "CLI Cheat Sheet", icon: BookOpen },
+              { id: "cheatsheet", label: "CLI Cheat Sheet", icon: HelpCircle },
+              { id: "myprofile", label: "My Profile", icon: User },
               { id: "settings", label: "Settings", icon: Settings },
             ].map((menu) => {
               const Icon = menu.icon;
@@ -284,14 +396,14 @@ export default function App() {
                 <button
                   key={menu.id}
                   onClick={() => { playSound("click"); setActiveTab(menu.id as any); }}
-                  className={`w-full px-4 py-2.5 rounded-xl text-xs font-mono font-bold tracking-wider uppercase transition-all flex items-center justify-between cursor-pointer group ${
+                  className={`w-full px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between cursor-pointer group ${
                     isActive
-                      ? "bg-[#1A237E]/40 text-[#00E5FF] border border-[#00E5FF]/30 shadow-[0_0_8px_rgba(0,229,255,0.15)]"
-                      : "text-slate-400 hover:text-slate-200 border border-transparent hover:bg-slate-900/40"
+                      ? "bg-blue-600/10 text-blue-400 border border-blue-500/25 font-extrabold"
+                      : "text-slate-400 hover:text-slate-200 border border-transparent hover:bg-slate-900/30"
                   }`}
                 >
-                  <div className="flex items-center gap-2.5">
-                    <Icon className={`h-4.5 w-4.5 ${isActive ? "text-[#00E5FF]" : "text-slate-400 group-hover:text-slate-300"}`} />
+                  <div className="flex items-center gap-3">
+                    <Icon className={`h-4.5 w-4.5 ${isActive ? "text-blue-400" : "text-slate-400 group-hover:text-slate-300"}`} />
                     <span>{menu.label}</span>
                   </div>
                   {menu.badge && (
@@ -305,43 +417,30 @@ export default function App() {
           </nav>
         </div>
 
-        {/* User profile quickcard bottom */}
-        <div className="pt-4 border-t border-slate-900 flex items-center justify-between gap-3 font-mono">
-          <div className="min-w-0 flex-1">
-            <div className="text-xs font-black text-[#E0E0E0] truncate">{currentUser.username}</div>
-            <div className="text-[9px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1 mt-0.5">
-              <Zap className="h-3 w-3 fill-amber-400 text-amber-500" />
-              {currentUser.totalPoints} PTS
-            </div>
-          </div>
-
-          <button
-            onClick={handleLogout}
-            className="p-2.5 rounded-xl bg-[#050508] border border-slate-850 hover:bg-rose-950/40 hover:border-rose-900/40 text-slate-500 hover:text-rose-400 transition-all cursor-pointer shrink-0"
-            title="Disconnect Terminal Session"
-          >
-            <LogOut className="h-4 w-4" />
-          </button>
-        </div>
+        {/* Sign Out Button at Bottom */}
+        <button
+          onClick={handleLogout}
+          className="w-full px-3.5 py-3 rounded-xl text-xs font-bold tracking-wider uppercase transition-all flex items-center gap-3 text-slate-400 hover:text-rose-400 hover:bg-rose-950/20 border border-transparent hover:border-rose-900/10 cursor-pointer group"
+        >
+          <LogOut className="h-4.5 w-4.5 text-slate-400 group-hover:text-rose-400" />
+          <span>Sign Out</span>
+        </button>
 
       </aside>
 
       {/* MOBILE HEADER BAR */}
-      <div className="md:hidden flex flex-col w-full z-40 sticky top-0 bg-[#0D111A]/95 backdrop-blur-md border-b border-slate-850">
+      <div className="md:hidden flex flex-col w-full z-40 sticky top-0 bg-[#0A1120]/95 backdrop-blur-md border-b border-slate-800/80">
         <header className="px-4 py-3.5 flex justify-between items-center">
           
           {/* Brand Logo */}
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-[#1A237E]/30 border border-[#00E5FF]/30 text-[#00E5FF]">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400">
               <Cpu className="h-4.5 w-4.5" />
             </div>
             <div>
-              <h1 className="text-md font-black tracking-tight text-white leading-none font-mono">
-                NET<span className="text-[#00E5FF]">FORGE</span>
+              <h1 className="text-sm font-black tracking-wider text-white leading-none uppercase">
+                NETFORGE <span className="text-[8px] px-1 py-0.5 rounded bg-blue-600/20 text-[#00E5FF] uppercase font-bold">Arena</span>
               </h1>
-              <span className="text-[8px] font-mono font-bold text-slate-500 uppercase tracking-widest block mt-0.5">
-                GAMIFIED CLI CORE
-              </span>
             </div>
           </div>
 
@@ -349,8 +448,8 @@ export default function App() {
           <div className="flex items-center gap-3">
             <div className="text-right font-mono">
               <div className="text-xs font-black text-[#E0E0E0] truncate max-w-[80px]">{currentUser.username}</div>
-              <div className="text-[9px] font-bold text-amber-400 uppercase tracking-wider">
-                {currentUser.totalPoints} PTS
+              <div className="text-[9px] font-bold text-blue-400 uppercase tracking-wider">
+                LV 1 // {currentUser.totalPoints} XP
               </div>
             </div>
             
@@ -367,28 +466,30 @@ export default function App() {
 
         {/* Mobile drawer panel */}
         {mobileMenuOpen && (
-          <div className="bg-[#0D111A] border-t border-slate-850 p-4 space-y-3 animate-in slide-in-from-top-4 duration-200">
+          <div className="bg-[#0A1120] border-t border-slate-800/60 p-4 space-y-3 animate-in slide-in-from-top-4 duration-200">
             
-            <div className="flex justify-between items-center pb-2 border-b border-slate-900 font-mono text-xs">
-              <span className="text-slate-500">Node Status:</span>
-              <span className="text-[#00E5FF] font-bold">{currentUser.username} ({currentUser.totalPoints} pts)</span>
+            <div className="flex justify-between items-center pb-2 border-b border-slate-900 text-xs">
+              <span className="text-slate-500 font-semibold">User:</span>
+              <span className="text-blue-400 font-extrabold">{currentUser.username} ({currentUser.totalPoints} XP)</span>
             </div>
 
             <div className="grid grid-cols-2 gap-2">
               {[
-                { id: "dashboard", label: "Arena Hub" },
-                { id: "arena", label: "Gameplay Arena" },
-                { id: "creator", label: "Creator Studio" },
+                { id: "dashboard", label: "Dashboard" },
+                { id: "arena", label: "Challenges" },
+                ...(currentUser.mockRole === "Admin" ? [{ id: "manage_users", label: "Manage Users" }] : []),
+                { id: "creator", label: "Create" },
                 { id: "leaderboard", label: "Leaderboard" },
                 { id: "cheatsheet", label: "CLI Cheat Sheet" },
+                { id: "myprofile", label: "My Profile" },
                 { id: "settings", label: "Settings" },
               ].map((menu) => (
                 <button
                   key={menu.id}
                   onClick={() => { playSound("click"); setActiveTab(menu.id as any); setMobileMenuOpen(false); }}
-                  className={`py-2.5 px-3 rounded-xl text-xs font-mono font-bold tracking-wider uppercase text-left transition-all border ${
+                  className={`py-2.5 px-3 rounded-xl text-xs font-bold text-left transition-all border ${
                     activeTab === menu.id
-                      ? "bg-[#1A237E]/40 text-[#00E5FF] border-[#00E5FF]/20"
+                      ? "bg-blue-600/15 text-blue-400 border-blue-500/25"
                       : "text-slate-400 border-transparent bg-slate-950/20"
                   }`}
                 >
@@ -399,7 +500,7 @@ export default function App() {
 
             <button
               onClick={handleLogout}
-              className="w-full py-2.5 px-4 rounded-xl text-xs font-mono font-bold tracking-wider uppercase text-center text-rose-400 bg-rose-950/20 hover:bg-rose-950 transition-all flex items-center justify-center gap-2 border border-rose-900/30"
+              className="w-full py-2.5 px-4 rounded-xl text-xs font-bold tracking-wider uppercase text-center text-rose-400 bg-rose-950/20 hover:bg-rose-950 transition-all flex items-center justify-center gap-2 border border-rose-900/30"
             >
               <LogOut className="h-4 w-4" /> Disconnect Node
             </button>
@@ -427,39 +528,41 @@ export default function App() {
             activeProblem ? (
               <Arena
                 problem={activeProblem}
-                onQuit={() => { playSound("click"); setActiveProblem(null); setActiveTab("dashboard"); }}
+                onQuit={() => { playSound("click"); setActiveProblem(null); setActiveTab("arena"); }}
                 onSolve={handleSolveProblem}
                 onNextProblem={handleNextProblem}
                 hasNextProblem={appState.problems.findIndex((p) => p.id === activeProblem.id) < appState.problems.length - 1}
               />
             ) : (
-              <div className="py-20 text-center max-w-sm mx-auto space-y-4">
-                <div className="w-16 h-16 bg-[#1A237E]/20 border border-slate-800 rounded-full mx-auto flex items-center justify-center text-slate-500">
-                  <Terminal className="h-7 w-7" />
-                </div>
-                <div className="space-y-1">
-                  <h3 className="text-base font-black text-white uppercase tracking-tight font-mono">
-                    No Active Session Loaded
-                  </h3>
-                  <p className="text-xs text-slate-400 leading-relaxed font-semibold">
-                    Select a gamified configuration problem from the Arena Hub feed to compile and begin your training session.
-                  </p>
-                </div>
-                <button
-                  onClick={() => { playSound("click"); setActiveTab("dashboard"); }}
-                  className="w-full bg-[#1A237E] hover:bg-[#1A237E]/80 text-[#00E5FF] border border-[#00E5FF]/30 font-mono font-bold py-3.5 rounded-2xl text-xs uppercase tracking-wider transition-all cursor-pointer"
-                >
-                  BROWSE ARENA CHALLENGES
-                </button>
-              </div>
+              <Challenges
+                appState={appState}
+                onSelectProblem={setActiveProblem}
+                onNavigate={setActiveTab}
+                completedProblems={completedProblems}
+                currentUser={currentUser}
+                onEditProblem={(prob) => {
+                  setEditingProblem(prob);
+                  setActiveTab("creator");
+                }}
+              />
             )
           )}
 
           {activeTab === "creator" && (
             <CreatorStudio
               onPublish={handlePublishProblem}
-              onCancel={() => { playSound("click"); setActiveTab("dashboard"); }}
+              onCancel={() => {
+                playSound("click");
+                setEditingProblem(null);
+                setActiveTab("dashboard");
+              }}
+              problemToEdit={editingProblem || undefined}
+              currentUser={currentUser || undefined}
             />
+          )}
+
+          {activeTab === "cheatsheet" && (
+            <CheatSheet />
           )}
 
           {activeTab === "leaderboard" && (
@@ -469,8 +572,14 @@ export default function App() {
             />
           )}
 
-          {activeTab === "cheatsheet" && (
-            <CheatSheet />
+          {activeTab === "myprofile" && (
+            <OperatorSettings
+              currentUserState={currentUser}
+              onUpdateUser={handleUpdateUser}
+              onResetProgress={handleResetProgress}
+              onSeedDefaults={handleSeedDefaults}
+              mode="profile"
+            />
           )}
 
           {activeTab === "settings" && (
@@ -479,19 +588,28 @@ export default function App() {
               onUpdateUser={handleUpdateUser}
               onResetProgress={handleResetProgress}
               onSeedDefaults={handleSeedDefaults}
+              mode="settings"
+            />
+          )}
+
+          {activeTab === "manage_users" && (
+            <UserManagement
+              users={appState.users || []}
+              onUpdateUsers={handleUpdateUsers}
+              currentUser={currentUser}
             />
           )}
 
         </main>
 
         {/* Footer system status line */}
-        <footer className="bg-[#0D111A] border-t border-slate-850 px-4 py-3 flex flex-col sm:flex-row justify-between items-center text-[10px] font-mono text-slate-600 gap-2 mt-auto">
+        <footer className="bg-[#050508] border-t border-slate-900/40 px-4 py-3 flex flex-col sm:flex-row justify-between items-center text-[10px] font-mono text-slate-600 gap-2 mt-auto">
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>NETFORGE CLOUD SHELL v4.0.1 // STATUS COMPILING SECURE</span>
+            <span>NETFORGE CLOUD ENGINE v4.0.1 // STANDBY SECURE</span>
           </div>
           <div className="flex items-center gap-3">
-            <span>HOST INGRESS PORT: 3000</span>
+            <span>PORT 3000</span>
             <span>© 2026 NETFORGE ACADEMY</span>
           </div>
         </footer>
