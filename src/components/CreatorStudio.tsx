@@ -174,6 +174,30 @@ export const TopologyPreview: React.FC<{ name: string }> = ({ name }) => {
   );
 };
 
+export const getDevicesForTopology = (topology: string) => {
+  if (topology === "Ring Topology") {
+    return [
+      { id: "RouterA", name: "Router A (R-A)" },
+      { id: "RouterB", name: "Router B (R-B)" },
+      { id: "RouterC", name: "Router C (R-C)" },
+    ];
+  } else if (topology === "Access-Core Spine") {
+    return [
+      { id: "Spine1", name: "Spine Router 1 (S-R1)" },
+      { id: "Spine2", name: "Spine Router 2 (S-R2)" },
+      { id: "Leaf1", name: "Leaf Switch 1 (L-SW1)" },
+      { id: "Leaf2", name: "Leaf Switch 2 (L-SW2)" },
+      { id: "Leaf3", name: "Leaf Switch 3 (L-SW3)" },
+    ];
+  } else {
+    return [
+      { id: "RouterA", name: "Router A (R-A)" },
+      { id: "RouterB", name: "Router B (R-B)" },
+      { id: "SwitchA", name: "Switch A (SW-A)" },
+    ];
+  }
+};
+
 export const CreatorStudio: React.FC<CreatorStudioProps> = ({
   onPublish,
   onCancel,
@@ -205,6 +229,24 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
     { lineIndex: 0, textBefore: "ip domain-name", blankValue: "forge.net", textAfter: "" },
     { lineIndex: 1, textBefore: "crypto", blankValue: "key", textAfter: "generate rsa modulus 1024" },
   ]);
+
+  // Batch states for multiple devices syntax configuration
+  const [batchDevice, setBatchDevice] = useState<string>("");
+  const [batchPrompt, setBatchPrompt] = useState<string>("");
+  const [batchScript, setBatchScript] = useState<string>("");
+
+  const [batchBlanksDevice, setBatchBlanksDevice] = useState<string>("");
+  const [batchBlanksText, setBatchBlanksText] = useState<string>("");
+
+  // Sync batch device defaults when topology template changes
+  useEffect(() => {
+    const devices = getDevicesForTopology(topologyTemplate);
+    if (devices.length > 0) {
+      setBatchDevice(devices[0].id);
+      setBatchPrompt(devices[0].id + ">");
+      setBatchBlanksDevice(devices[0].id);
+    }
+  }, [topologyTemplate]);
 
   useEffect(() => {
     if (problemToEdit) {
@@ -272,12 +314,14 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
   const handleAddTypingStep = () => {
     playSound("click");
     const lastPrompt = typingSteps[typingSteps.length - 1]?.prompt || "Router>";
+    const lastDevice = typingSteps[typingSteps.length - 1]?.device || getDevicesForTopology(topologyTemplate)[0]?.id || "RouterA";
     setTypingSteps([
       ...typingSteps,
       {
         stepIndex: typingSteps.length,
         prompt: lastPrompt,
         expectedInput: "",
+        device: lastDevice,
       },
     ]);
   };
@@ -301,6 +345,7 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
   // Blanks config helpers
   const handleAddBlankLine = () => {
     playSound("click");
+    const lastDevice = blankLines[blankLines.length - 1]?.device || getDevicesForTopology(topologyTemplate)[0]?.id || "RouterA";
     setBlankLines([
       ...blankLines,
       {
@@ -308,6 +353,7 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
         textBefore: "",
         blankValue: "",
         textAfter: "",
+        device: lastDevice,
       },
     ]);
   };
@@ -325,6 +371,80 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
     const updated = [...blankLines];
     updated[idx] = { ...updated[idx], [field]: value };
     setBlankLines(updated);
+  };
+
+  const handleAppendBatchSteps = () => {
+    if (!batchScript.trim()) return;
+    playSound("success");
+
+    const lines = batchScript.split("\n")
+      .map(l => l.trim())
+      .filter(l => l.length > 0);
+
+    const newSteps: Step[] = lines.map((line, index) => {
+      return {
+        stepIndex: typingSteps.length + index,
+        prompt: batchPrompt || "Router>",
+        expectedInput: line,
+        device: batchDevice,
+      };
+    });
+
+    setTypingSteps([...typingSteps, ...newSteps]);
+    setBatchScript("");
+  };
+
+  const handleAppendBatchBlanks = () => {
+    if (!batchBlanksText.trim()) return;
+    playSound("success");
+
+    const lines = batchBlanksText.split("\n")
+      .map(l => l.trim())
+      .filter(l => l.length > 0);
+
+    const newBlankLines: BlankLine[] = [];
+
+    lines.forEach((line) => {
+      const match = line.match(/\[([^\]]+)\]/);
+      if (match) {
+        const blankValue = match[1];
+        const placeholder = match[0];
+        const idx = line.indexOf(placeholder);
+        const textBefore = line.substring(0, idx).trim();
+        const textAfter = line.substring(idx + placeholder.length).trim();
+        newBlankLines.push({
+          lineIndex: blankLines.length + newBlankLines.length,
+          textBefore,
+          blankValue,
+          textAfter,
+          device: batchBlanksDevice,
+        });
+      } else {
+        const words = line.split(" ");
+        if (words.length > 1) {
+          const blankValue = words[words.length - 1];
+          const textBefore = words.slice(0, words.length - 1).join(" ");
+          newBlankLines.push({
+            lineIndex: blankLines.length + newBlankLines.length,
+            textBefore,
+            blankValue,
+            textAfter: "",
+            device: batchBlanksDevice,
+          });
+        } else {
+          newBlankLines.push({
+            lineIndex: blankLines.length + newBlankLines.length,
+            textBefore: line,
+            blankValue: "",
+            textAfter: "",
+            device: batchBlanksDevice,
+          });
+        }
+      }
+    });
+
+    setBlankLines([...blankLines, ...newBlankLines]);
+    setBatchBlanksText("");
   };
 
   // Highlight word tool to convert custom text line to blank structure
@@ -678,206 +798,415 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
 
           {/* Typing format steps form */}
           {format === "typing" ? (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-xs font-black text-white uppercase tracking-wider font-mono">
-                  Config Prompts and Commands Sequence
-                </span>
-                <button
-                  onClick={handleAddTypingStep}
-                  className="bg-slate-900 hover:bg-[#00E5FF]/10 text-slate-350 hover:text-[#00E5FF] border border-slate-850 px-3 py-1.5 rounded-xl text-[10px] font-bold font-mono transition-all flex items-center gap-1 cursor-pointer"
-                >
-                  <Plus className="h-3.5 w-3.5" /> ADD INTERACTIVE STEP
-                </button>
-              </div>
+            <div className="space-y-6">
+              
+              {/* Batch CLI Command Compiler Widget */}
+              <div className="bg-[#050508]/60 border border-dashed border-slate-800 rounded-xl p-5 space-y-4">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4.5 w-4.5 text-[#00E5FF] animate-pulse" />
+                  <span className="text-xs font-black text-white uppercase tracking-wider font-mono block">
+                    ⚡ BATCH CLI SCRIPT COMPILER (เขียนสคริปต์หลายเครื่องพร้อมกัน)
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  ป้อนหรือวางคำสั่งสคริปต์ (Cisco IOS commands) หลายบรรทัดพร้อมกันสำหรับอุปกรณ์ที่เลือก เพื่อแปลงและเพิ่มเป็นสเต็ปการพิมพ์โดยอัตโนมัติ (Paste multiple commands for a device to convert them into sequenced steps automatically)
+                </p>
 
-              <div className="space-y-3">
-                {typingSteps.map((step, idx) => (
-                  <div
-                    key={idx}
-                    className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 p-4 bg-[#050508] border border-slate-850 rounded-xl font-mono text-xs"
-                  >
-                    {/* Index */}
-                    <span className="text-[10px] font-black text-[#00E5FF] uppercase tracking-wider shrink-0">
-                      Step #{idx + 1}
-                    </span>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Target device selector */}
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">
+                      1. เลือกอุปกรณ์เป้าหมาย (Target Device)
+                    </label>
+                    <select
+                      value={batchDevice}
+                      onChange={(e) => {
+                        setBatchDevice(e.target.value);
+                        setBatchPrompt(e.target.value + ">");
+                      }}
+                      className="w-full bg-[#020204] border border-slate-800 rounded-lg px-3 py-2 text-xs text-[#00E5FF] font-mono focus:outline-none focus:border-[#00E5FF]"
+                    >
+                      {getDevicesForTopology(topologyTemplate).map((dev) => (
+                        <option key={dev.id} value={dev.id}>
+                          {dev.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-                    {/* Router Prompt */}
-                    <div className="flex-1 space-y-1">
-                      <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">
-                        Router CLI Prompt
-                      </div>
+                  {/* Prefix prompt selector */}
+                  <div className="space-y-1.5 md:col-span-2">
+                    <label className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">
+                      2. รูปแบบ Prompt คอนโซลเริ่มต้น (Console Prompt Format)
+                    </label>
+                    <div className="flex gap-2">
                       <input
                         type="text"
-                        value={step.prompt}
-                        onChange={(e) => handleTypingStepChange(idx, "prompt", e.target.value)}
-                        className="w-full bg-[#020204] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#00E5FF] font-mono"
+                        value={batchPrompt}
+                        onChange={(e) => setBatchPrompt(e.target.value)}
+                        className="flex-1 bg-[#020204] border border-slate-800 rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-[#00E5FF]"
                         placeholder="e.g. Router(config)#"
                       />
-                    </div>
-
-                    {/* Expected Solution Input */}
-                    <div className="flex-[2] space-y-1">
-                      <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">
-                        Expected Command Syntax Entry
+                      <div className="flex gap-1">
+                        {["&gt;", "#", "(config)#", "(config-if)#"].map((preset) => {
+                          const display = preset.replace("&gt;", ">");
+                          return (
+                            <button
+                              key={preset}
+                              type="button"
+                              onClick={() => setBatchPrompt(batchDevice + display)}
+                              className="px-2 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded text-[10px] font-mono text-slate-300 hover:text-white transition-all cursor-pointer"
+                            >
+                              {display}
+                            </button>
+                          );
+                        })}
                       </div>
-                      <input
-                        type="text"
-                        value={step.expectedInput}
-                        onChange={(e) => handleTypingStepChange(idx, "expectedInput", e.target.value)}
-                        className="w-full bg-[#020204] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-emerald-400 focus:outline-none focus:border-[#00E5FF] font-mono"
-                        placeholder="e.g. ip address 10.0.0.1 255.0.0.0"
-                      />
                     </div>
-
-                    {/* Actions */}
-                    <div className="shrink-0 pt-4 sm:pt-0">
-                      <button
-                        onClick={() => handleRemoveTypingStep(idx)}
-                        disabled={typingSteps.length <= 1}
-                        className="p-2 bg-[#020204] border border-slate-800 hover:bg-rose-950/40 hover:border-rose-900 text-slate-500 hover:text-rose-400 rounded-lg transition-all disabled:opacity-30 cursor-pointer"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-
                   </div>
-                ))}
+                </div>
+
+                {/* Script input textarea */}
+                <div className="space-y-1.5">
+                  <label className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">
+                    3. พิมพ์หรือวางคำสั่งสคริปต์ (Cisco IOS Commands - 1 คำสั่งต่อบรรทัด)
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={batchScript}
+                    onChange={(e) => setBatchScript(e.target.value)}
+                    className="w-full bg-[#020204] border border-slate-800 rounded-lg p-3 text-xs text-emerald-400 font-mono focus:outline-none focus:border-[#00E5FF] placeholder-slate-650"
+                    placeholder={`enable\nconfigure terminal\ninterface gigabitethernet0/0\nip address 192.168.1.1 255.255.255.0\nno shutdown`}
+                  />
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleAppendBatchSteps}
+                    disabled={!batchScript.trim()}
+                    className="bg-[#1A237E] hover:bg-[#1A237E]/85 disabled:opacity-30 disabled:pointer-events-none text-[#00E5FF] border border-[#00E5FF]/30 px-5 py-2.5 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Plus className="h-4 w-4" /> COMPILE & APPEND CLI STEPS TO {batchDevice}
+                  </button>
+                </div>
+              </div>
+
+              {/* Individual Steps Sequence List */}
+              <div className="space-y-4 pt-4 border-t border-slate-900">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <span className="text-xs font-black text-white uppercase tracking-wider font-mono block">
+                      Config Prompts and Commands Sequence
+                    </span>
+                    <p className="text-[10px] text-slate-500 font-mono">
+                      ขั้นตอนการป้อนคำสั่งแบบ Interactive (จัดเรียงตามสเต็ป)
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleAddTypingStep}
+                    className="bg-slate-900 hover:bg-[#00E5FF]/10 text-slate-350 hover:text-[#00E5FF] border border-slate-850 px-3 py-1.5 rounded-xl text-[10px] font-bold font-mono transition-all flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> ADD INTERACTIVE STEP
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {typingSteps.map((step, idx) => {
+                    const availableDevices = getDevicesForTopology(topologyTemplate);
+                    const defaultDev = availableDevices[0]?.id || "RouterA";
+                    return (
+                      <div
+                        key={idx}
+                        className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3.5 p-4 bg-[#050508] border border-slate-850 rounded-xl font-mono text-xs"
+                      >
+                        {/* Index */}
+                        <div className="flex items-center justify-between lg:justify-start gap-2 shrink-0">
+                          <span className="text-[10px] font-black text-[#00E5FF] uppercase tracking-wider">
+                            Step #{idx + 1}
+                          </span>
+                        </div>
+
+                        {/* Target Device Dropdown */}
+                        <div className="flex-1 space-y-1">
+                          <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">
+                            Target Device (อุปกรณ์เป้าหมาย)
+                          </div>
+                          <select
+                            value={step.device || defaultDev}
+                            onChange={(e) => handleTypingStepChange(idx, "device", e.target.value)}
+                            className="w-full bg-[#020204] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-[#00E5FF] font-mono focus:outline-none focus:border-[#00E5FF]"
+                          >
+                            {availableDevices.map((dev) => (
+                              <option key={dev.id} value={dev.id}>
+                                {dev.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Router Prompt */}
+                        <div className="flex-1 space-y-1">
+                          <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">
+                            Router CLI Prompt (รูปแบบ prompt)
+                          </div>
+                          <input
+                            type="text"
+                            value={step.prompt}
+                            onChange={(e) => handleTypingStepChange(idx, "prompt", e.target.value)}
+                            className="w-full bg-[#020204] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#00E5FF] font-mono"
+                            placeholder="e.g. Router(config)#"
+                          />
+                        </div>
+
+                        {/* Expected Solution Input */}
+                        <div className="flex-[2] space-y-1">
+                          <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">
+                            Expected Command Syntax Entry (คำสั่งที่ถูกต้อง)
+                          </div>
+                          <input
+                            type="text"
+                            value={step.expectedInput}
+                            onChange={(e) => handleTypingStepChange(idx, "expectedInput", e.target.value)}
+                            className="w-full bg-[#020204] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-emerald-400 focus:outline-none focus:border-[#00E5FF] font-mono"
+                            placeholder="e.g. ip address 10.0.0.1 255.0.0.0"
+                          />
+                        </div>
+
+                        {/* Actions */}
+                        <div className="shrink-0 pt-2 lg:pt-4 flex justify-end">
+                          <button
+                            onClick={() => handleRemoveTypingStep(idx)}
+                            disabled={typingSteps.length <= 1}
+                            className="p-2 bg-[#020204] border border-slate-800 hover:bg-rose-950/40 hover:border-rose-900 text-slate-500 hover:text-rose-400 rounded-lg transition-all disabled:opacity-30 cursor-pointer"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           ) : (
             
             /* Blanks layout parameters */
-            <div className="space-y-5">
+            <div className="space-y-6">
               
-              {/* Highlight word to blank converter widget */}
-              <div className="bg-[#050508] border border-slate-850 rounded-xl p-4 space-y-3">
-                <span className="text-[10px] font-black text-[#00E5FF] uppercase tracking-wider font-mono block">
-                  Quick Highlight Converter Tool
-                </span>
-                <p className="text-[10px] text-slate-500">
-                  Write down your config statement line and specify the word you want replaced with an interactive blank entry box.
+              {/* Batch Blanks Bracket Compiler Widget */}
+              <div className="bg-[#050508]/60 border border-dashed border-slate-800 rounded-xl p-5 space-y-4">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4.5 w-4.5 text-amber-500 animate-pulse" />
+                  <span className="text-xs font-black text-white uppercase tracking-wider font-mono block">
+                    ⚡ BATCH FILL-IN-THE-BLANKS COMPILER (เขียน Blanks หลายเครื่องพร้อมกัน)
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  เขียนหรือวางสคริปต์คำสั่ง Cisco IOS โดยคำที่อยู่ระหว่างเครื่องหมายวงเล็บเหลี่ยม <span className="text-amber-400 font-bold">[...]</span> จะถูกตรวจจับและทำเป็นกล่องให้ผู้เรียนกรอกโดยอัตโนมัติ (Words inside brackets like <code className="text-amber-400 font-bold">[word]</code> will become fillable blanks!)
                 </p>
 
-                <div className="flex flex-col sm:flex-row gap-3 items-end">
-                  <div className="flex-1 space-y-1">
-                    <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">
-                      Command Line Example
-                    </div>
-                    <input
-                      type="text"
-                      value={quickLineText}
-                      onChange={(e) => setQuickLineText(e.target.value)}
-                      className="w-full bg-[#020204] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#00E5FF] font-mono"
-                      placeholder="e.g. crypto key generate rsa modulus 2048"
-                    />
-                  </div>
-
-                  <div className="flex-1 space-y-1">
-                    <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">
-                      Word to Substitute with Blank
-                    </div>
-                    <input
-                      type="text"
-                      value={quickBlankWord}
-                      onChange={(e) => setQuickBlankWord(e.target.value)}
-                      className="w-full bg-[#020204] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-amber-400 focus:outline-none focus:border-[#00E5FF] font-mono"
-                      placeholder="e.g. rsa"
-                    />
-                  </div>
-
-                  <button
-                    onClick={handleConvertTextToBlankLine}
-                    className="bg-[#1A237E] hover:bg-[#1A237E]/80 text-[#00E5FF] border border-[#00E5FF]/20 px-4 py-2.5 rounded-lg text-xs font-mono font-bold uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap"
-                  >
-                    Convert to Blank
-                  </button>
-                </div>
-              </div>
-
-              {/* Blank lines table form lists */}
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-xs font-black text-white uppercase tracking-wider font-mono">
-                    Constructed Blanks Script Lines
-                  </span>
-                  <button
-                    onClick={handleAddBlankLine}
-                    className="bg-slate-900 hover:bg-[#00E5FF]/10 text-slate-350 hover:text-[#00E5FF] border border-slate-850 px-3 py-1.5 rounded-xl text-[10px] font-bold font-mono transition-all flex items-center gap-1 cursor-pointer"
-                  >
-                    <Plus className="h-3.5 w-3.5" /> ADD MANUAL LINE
-                  </button>
-                </div>
-
-                <div className="space-y-3">
-                  {blankLines.map((line, idx) => (
-                    <div
-                      key={idx}
-                      className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 p-4 bg-[#050508] border border-slate-850 rounded-xl font-mono text-xs"
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Target device selector */}
+                  <div className="space-y-1.5 col-span-1">
+                    <label className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">
+                      1. เลือกอุปกรณ์เป้าหมาย (Target Device)
+                    </label>
+                    <select
+                      value={batchBlanksDevice}
+                      onChange={(e) => setBatchBlanksDevice(e.target.value)}
+                      className="w-full bg-[#020204] border border-slate-800 rounded-lg px-3 py-2 text-xs text-[#00E5FF] font-mono focus:outline-none focus:border-[#00E5FF]"
                     >
-                      <span className="text-[10px] font-black text-[#00E5FF] uppercase tracking-wider shrink-0">
-                        Line #{idx + 1}
-                      </span>
+                      {getDevicesForTopology(topologyTemplate).map((dev) => (
+                        <option key={dev.id} value={dev.id}>
+                          {dev.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-                      {/* Text before */}
-                      <div className="flex-1 space-y-1">
-                        <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">
-                          Prefix Text
-                        </div>
-                        <input
-                          type="text"
-                          value={line.textBefore}
-                          onChange={(e) => handleBlankLineChange(idx, "textBefore", e.target.value)}
-                          className="w-full bg-[#020204] border border-slate-800 rounded-lg px-2 py-1 text-xs text-white font-mono"
-                          placeholder="ip domain-name"
-                        />
-                      </div>
-
-                      {/* Blank expected value */}
-                      <div className="flex-1 space-y-1">
-                        <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">
-                          Interactive Blank Answer
-                        </div>
-                        <input
-                          type="text"
-                          value={line.blankValue}
-                          onChange={(e) => handleBlankLineChange(idx, "blankValue", e.target.value)}
-                          className="w-full bg-[#020204] border border-slate-800 rounded-lg px-2 py-1 text-xs text-amber-400 font-mono text-center font-bold"
-                          placeholder="Expected word"
-                        />
-                      </div>
-
-                      {/* Text after */}
-                      <div className="flex-1 space-y-1">
-                        <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">
-                          Suffix Text
-                        </div>
-                        <input
-                          type="text"
-                          value={line.textAfter}
-                          onChange={(e) => handleBlankLineChange(idx, "textAfter", e.target.value)}
-                          className="w-full bg-[#020204] border border-slate-800 rounded-lg px-2 py-1 text-xs text-white font-mono"
-                          placeholder="Optional trailing parameters"
-                        />
-                      </div>
-
-                      {/* Action */}
-                      <div className="shrink-0 pt-4 sm:pt-0">
-                        <button
-                          onClick={() => handleRemoveBlankLine(idx)}
-                          disabled={blankLines.length <= 1}
-                          className="p-1.5 bg-[#020204] border border-slate-800 hover:bg-rose-950/40 hover:border-rose-900 text-slate-500 hover:text-rose-400 rounded-lg transition-all disabled:opacity-30 cursor-pointer"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-
-                    </div>
-                  ))}
+                  {/* Batch Blank script area */}
+                  <div className="space-y-1.5 md:col-span-2">
+                    <label className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">
+                      2. ป้อนข้อความคำสั่งพร้อมวงเล็บเหลี่ยม (Cisco IOS script with [...] blanks)
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={batchBlanksText}
+                      onChange={(e) => setBatchBlanksText(e.target.value)}
+                      className="w-full bg-[#020204] border border-slate-800 rounded-lg p-3 text-xs text-white font-mono focus:outline-none focus:border-[#00E5FF] placeholder-slate-650"
+                      placeholder={`ip domain-name [forge.net]\ncrypto [key] generate rsa modulus 1024\nusername admin secret [cisco]`}
+                    />
+                  </div>
                 </div>
 
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleAppendBatchBlanks}
+                    disabled={!batchBlanksText.trim()}
+                    className="bg-[#1A237E] hover:bg-[#1A237E]/85 disabled:opacity-30 disabled:pointer-events-none text-[#00E5FF] border border-[#00E5FF]/30 px-5 py-2.5 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Plus className="h-4 w-4" /> COMPILE & APPEND BATCH BLANKS TO {batchBlanksDevice}
+                  </button>
+                </div>
               </div>
 
+              {/* Single line converter & lists */}
+              <div className="space-y-5 pt-4 border-t border-slate-900">
+                {/* Highlight word to blank converter widget */}
+                <div className="bg-[#050508] border border-slate-850 rounded-xl p-4 space-y-3">
+                  <span className="text-[10px] font-black text-[#00E5FF] uppercase tracking-wider font-mono block">
+                    Quick Highlight Converter Tool (ตัวช่วยแปลงบรรทัดข้อความเดี่ยว)
+                  </span>
+                  <p className="text-[10px] text-slate-500">
+                    เครื่องมือด่วนเขียนบรรทัดเดี่ยว: พิมพ์คำสั่งทั้งหมดแล้วระบุคำที่ต้องการทำเป็นช่องว่าง (Specify command and target word to make blank)
+                  </p>
+
+                  <div className="flex flex-col lg:flex-row gap-3 items-end">
+                    <div className="flex-1 space-y-1">
+                      <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">
+                        Command Line Example
+                      </div>
+                      <input
+                        type="text"
+                        value={quickLineText}
+                        onChange={(e) => setQuickLineText(e.target.value)}
+                        className="w-full bg-[#020204] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#00E5FF] font-mono"
+                        placeholder="e.g. crypto key generate rsa modulus 2048"
+                      />
+                    </div>
+
+                    <div className="flex-1 space-y-1">
+                      <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">
+                        Word to Substitute with Blank
+                      </div>
+                      <input
+                        type="text"
+                        value={quickBlankWord}
+                        onChange={(e) => setQuickBlankWord(e.target.value)}
+                        className="w-full bg-[#020204] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-amber-400 focus:outline-none focus:border-[#00E5FF] font-mono"
+                        placeholder="e.g. rsa"
+                      />
+                    </div>
+
+                    <button
+                      onClick={handleConvertTextToBlankLine}
+                      className="bg-[#1A237E] hover:bg-[#1A237E]/80 text-[#00E5FF] border border-[#00E5FF]/20 px-4 py-2.5 rounded-lg text-xs font-mono font-bold uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap"
+                    >
+                      Convert to Blank
+                    </button>
+                  </div>
+                </div>
+
+                {/* Blank lines table form lists */}
+                <div className="space-y-4 pt-2">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <span className="text-xs font-black text-white uppercase tracking-wider font-mono block">
+                        Constructed Blanks Script Lines
+                      </span>
+                      <p className="text-[10px] text-slate-500 font-mono">
+                        รายการบรรทัดเว้นวรรค (Blanks) ที่สร้างเสร็จแล้วสำหรับอุปกรณ์ต่างๆ
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleAddBlankLine}
+                      className="bg-slate-900 hover:bg-[#00E5FF]/10 text-slate-350 hover:text-[#00E5FF] border border-slate-850 px-3 py-1.5 rounded-xl text-[10px] font-bold font-mono transition-all flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="h-3.5 w-3.5" /> ADD MANUAL LINE
+                    </button>
+                  </div>
+
+                  <div className="space-y-3">
+                    {blankLines.map((line, idx) => {
+                      const availableDevices = getDevicesForTopology(topologyTemplate);
+                      const defaultDev = availableDevices[0]?.id || "RouterA";
+                      return (
+                        <div
+                          key={idx}
+                          className="flex flex-col lg:flex-row items-stretch lg:items-center gap-2.5 p-4 bg-[#050508] border border-slate-850 rounded-xl font-mono text-xs"
+                        >
+                          <span className="text-[10px] font-black text-[#00E5FF] uppercase tracking-wider shrink-0">
+                            Line #{idx + 1}
+                          </span>
+
+                          {/* Target Device Dropdown */}
+                          <div className="flex-1 space-y-1">
+                            <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">
+                              Device (อุปกรณ์)
+                            </div>
+                            <select
+                              value={line.device || defaultDev}
+                              onChange={(e) => handleBlankLineChange(idx, "device", e.target.value)}
+                              className="w-full bg-[#020204] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-[#00E5FF] font-mono focus:outline-none focus:border-[#00E5FF]"
+                            >
+                              {availableDevices.map((dev) => (
+                                <option key={dev.id} value={dev.id}>
+                                  {dev.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Text before */}
+                          <div className="flex-[2] space-y-1">
+                            <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">
+                              Prefix Text (คำสั่งส่วนหน้า)
+                            </div>
+                            <input
+                              type="text"
+                              value={line.textBefore}
+                              onChange={(e) => handleBlankLineChange(idx, "textBefore", e.target.value)}
+                              className="w-full bg-[#020204] border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white font-mono"
+                              placeholder="ip domain-name"
+                            />
+                          </div>
+
+                          {/* Blank expected value */}
+                          <div className="flex-1 space-y-1">
+                            <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">
+                              Blank Answer (คำตอบในช่องว่าง)
+                            </div>
+                            <input
+                              type="text"
+                              value={line.blankValue}
+                              onChange={(e) => handleBlankLineChange(idx, "blankValue", e.target.value)}
+                              className="w-full bg-[#020204] border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-amber-400 font-mono text-center font-bold"
+                              placeholder="Expected word"
+                            />
+                          </div>
+
+                          {/* Text after */}
+                          <div className="flex-[2] space-y-1">
+                            <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">
+                              Suffix Text (คำสั่งส่วนท้าย)
+                            </div>
+                            <input
+                              type="text"
+                              value={line.textAfter}
+                              onChange={(e) => handleBlankLineChange(idx, "textAfter", e.target.value)}
+                              className="w-full bg-[#020204] border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white font-mono"
+                              placeholder="Optional trailing parameters"
+                            />
+                          </div>
+
+                          {/* Action */}
+                          <div className="shrink-0 pt-2 lg:pt-4 flex justify-end">
+                            <button
+                              onClick={() => handleRemoveBlankLine(idx)}
+                              disabled={blankLines.length <= 1}
+                              className="p-1.5 bg-[#020204] border border-slate-800 hover:bg-rose-950/40 hover:border-rose-900 text-slate-500 hover:text-rose-400 rounded-lg transition-all disabled:opacity-30 cursor-pointer"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 

@@ -100,6 +100,30 @@ const isWordMatch = (actualWord: string, expectedWord: string): boolean => {
   return false;
 };
 
+const getDevicesForTopology = (topology: string) => {
+  if (topology === "Ring Topology") {
+    return [
+      { id: "RouterA", name: "Router A (R-A)" },
+      { id: "RouterB", name: "Router B (R-B)" },
+      { id: "RouterC", name: "Router C (R-C)" },
+    ];
+  } else if (topology === "Access-Core Spine") {
+    return [
+      { id: "Spine1", name: "Spine Router 1 (S-R1)" },
+      { id: "Spine2", name: "Spine Router 2 (S-R2)" },
+      { id: "Leaf1", name: "Leaf Switch 1 (L-SW1)" },
+      { id: "Leaf2", name: "Leaf Switch 2 (L-SW2)" },
+      { id: "Leaf3", name: "Leaf Switch 3 (L-SW3)" },
+    ];
+  } else {
+    return [
+      { id: "RouterA", name: "Router A (R-A)" },
+      { id: "RouterB", name: "Router B (R-B)" },
+      { id: "SwitchA", name: "Switch A (SW-A)" },
+    ];
+  }
+};
+
 // Main function to check if the full typed line matches the expected configuration line
 const checkCommandMatch = (actualInput: string, expectedInput: string): boolean => {
   const actualClean = actualInput.trim().toLowerCase().replace(/\s+/g, " ");
@@ -255,6 +279,24 @@ export const Arena: React.FC<ArenaProps> = ({ problem, onQuit, onSolve, onNextPr
     if (!problem.steps || isCompleted) return;
 
     const currentStep = problem.steps[currentStepIndex];
+
+    // Check device match if defined
+    if (currentStep.device && currentStep.device !== selectedNode) {
+      playSound("error");
+      setErrorsCount((prev) => prev + 1);
+      setShakeInput(true);
+      setTimeout(() => setShakeInput(false), 500);
+      setTerminalHistory((prev) => [
+        ...prev,
+        { text: `${currentStep.prompt} ${cliInput}`, type: "input" },
+        {
+          text: `⚠️ [CONSOLE ROUTING MISMATCH] Command must be executed on '${currentStep.device}', but you are currently connected to '${selectedNode}'. Please click/tap '${currentStep.device}' in the topology layout to re-route your session.`,
+          type: "error"
+        },
+      ]);
+      return;
+    }
+
     const isMatch = checkCommandMatch(cliInput, currentStep.expectedInput);
 
     if (isMatch) {

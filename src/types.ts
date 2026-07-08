@@ -15,6 +15,7 @@ export interface Step {
   stepIndex: number;
   prompt: string;
   expectedInput: string;
+  device?: string;
 }
 
 export interface BlankLine {
@@ -22,6 +23,7 @@ export interface BlankLine {
   textBefore: string;
   blankValue: string;
   textAfter: string;
+  device?: string;
 }
 
 export interface Problem {
